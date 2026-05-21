@@ -1,0 +1,7 @@
+services:
+  - type: worker
+    name: my-telegram-bot
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
