@@ -4,17 +4,19 @@ const http = require('http');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
-bot.launch();
+// إضافة هذا السطر لمنع تضارب الـ Webhooks/Polling
+bot.launch({ dropPendingUpdates: true });
 console.log('Bot is running...');
 
 bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url || !url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ معالجة الفيديو، انتظر ثواني...');
+    ctx.reply('⏳ جارٍ معالجة الفيديو...');
 
     try {
-        const response = await axios.post('https://co.wuk.sh/api/json', {
+        // رابط API بديل ومستقر
+        const response = await axios.post('https://cobalt.api.leah.codes/api/json', {
             url: url,
             vQuality: "720"
         }, {
@@ -24,11 +26,11 @@ bot.on('text', async (ctx) => {
         if (response.data && response.data.url) {
             await ctx.replyWithVideo({ url: response.data.url });
         } else {
-            ctx.reply('❌ تعذر استخراج الرابط، جرب فيديو آخر.');
+            ctx.reply('❌ تعذر استخراج الفيديو.');
         }
     } catch (error) {
-        console.error("Error details:", error.response ? error.response.data : error.message);
-        ctx.reply('❌ حدث خطأ، تأكد من أن الرابط صحيح ومدعوم.');
+        console.error("Error details:", error.message);
+        ctx.reply('❌ حدث خطأ، حاول مجدداً.');
     }
 });
 
