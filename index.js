@@ -164,33 +164,4 @@ bot.on('text', async (ctx) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-});                }
-            } catch {
-                await downloadAndSend(ctx, url);
-            }
-        }
-
-    } catch (error) {
-        console.error(error);
-        await ctx.reply('❌ تعذر التحميل. الرابط غير مدعوم أو خاص.');
-    }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});                // fallback لـ yt-dlp
-                await downloadAndSend(ctx, url);
-            }
-        }
-
-    } catch (error) {
-        console.error(error);
-        await ctx.reply('❌ تعذر التحميل. الرابط غير مدعوم أو خاص.');
-    }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
 });
