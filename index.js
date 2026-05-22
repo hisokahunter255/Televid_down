@@ -1,5 +1,5 @@
 const { Telegraf } = require('telegraf');
-const axios = require('axios');
+const { exec } = require('child_process');
 const express = require('express');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -11,36 +11,25 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url || !url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ معالجة الفيديو...');
+    ctx.reply('⏳ جارٍ التحميل...');
 
-    try {
-        // المحاولة الأولى: استخدام Cobalt القوي (يدعم يوتيوب وتيك توك)
-        const response = await axios.post('https://api.cobalt.tools/api/json', {
-            url: url,
-            vQuality: "720"
-        }, {
-            headers: { 
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0'
-            }
-        });
-
-        if (response.data && response.data.url) {
-            await ctx.replyWithVideo({ url: response.data.url });
-        } 
-        // المحاولة الثانية (احتياطية لتيك توك فقط)
-        else if (url.includes('tiktok.com')) {
-            const tiktokRes = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
-            await ctx.replyWithVideo({ url: tiktokRes.data.data.play });
+    // استخدام yt-dlp لاستخراج الرابط المباشر
+    // --get-url هي الخاصية الأقوى لاستخراج رابط الفيديو المباشر
+    exec(`yt-dlp --get-url "${url}"`, (error, stdout, stderr) => {
+        if (error) {
+            ctx.reply('❌ تعذر التحميل. الرابط غير مدعوم أو خاص.');
+            return;
         }
-        else {
-            ctx.reply('❌ تعذر استخراج الرابط من يوتيوب، الرابط قد يكون مقيداً.');
+        
+        const videoUrl = stdout.trim();
+        if (videoUrl) {
+            ctx.replyWithVideo({ url: videoUrl }).catch(() => {
+                ctx.reply('الفيديو متاح عبر هذا الرابط:\n' + videoUrl);
+            });
+        } else {
+            ctx.reply('❌ لم يتم العثور على رابط صالح.');
         }
-    } catch (error) {
-        console.error("Final Error:", error.message);
-        ctx.reply('❌ تعذر التحميل، الخدمة قد تكون محظورة لهذا الفيديو.');
-    }
+    });
 });
 
 const PORT = process.env.PORT || 3000;
