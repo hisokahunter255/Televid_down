@@ -11,23 +11,19 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url || !url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ المعالجة...');
+    ctx.reply('⏳ جارٍ معالجة طلبك...');
 
     try {
-        // إذا كان الرابط تيك توك
-        if (url.includes('tiktok.com')) {
-            const response = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+        // نستخدم خدمة API مجانية ومستقرة للروابط
+        const response = await axios.get(`https://api.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+        
+        if (response.data && response.data.data && response.data.data.play) {
             await ctx.replyWithVideo({ url: response.data.data.play });
-        } 
-        // إذا كان يوتيوب
-        else {
-            // نستخدم خدمة ytdl-api مباشرة للروابط العامة
-            const response = await axios.get(`https://api.ytdl.is/v1/video/download?url=${encodeURIComponent(url)}`);
-            await ctx.replyWithVideo({ url: response.data.url });
+        } else {
+            ctx.reply('❌ لم أجد رابط تحميل صالح. جرب رابط تيك توك.');
         }
     } catch (error) {
-        console.error("Final Error:", error.message);
-        ctx.reply('❌ تعذر التحميل. الخدمة قد تكون غير متاحة لهذا الفيديو حالياً.');
+        ctx.reply('❌ خطأ في الاتصال بالسيرفر. حاول لاحقاً.');
     }
 });
 
