@@ -1,7 +1,7 @@
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
+const http = require('http');
 
-// قراءة التوكن من إعدادات البيئة (Render Environment Variables)
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 bot.launch();
@@ -11,39 +11,36 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ جلب الفيديو، يرجى الانتظار...');
+    ctx.reply('⏳ جارٍ معالجة الفيديو...');
 
     try {
-        // استخدام API الخاص بـ Cobalt للتحميل
+        // نستخدم API خدمة Cobalt المجانية والقوية للتحميل
         const response = await axios.post('https://api.cobalt.tools/api/json', {
             url: url,
             vQuality: "720",
-            isAudioOnly: false,
-            disableMetadata: true
+            filenameStyle: "classic"
         }, {
-            headers: {
+            headers: { 
                 'Accept': 'application/json',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json' 
             }
         });
 
-        const data = response.data;
+        // الـ API سيرد برابط مباشر للفيديو
+        const downloadUrl = response.data.url;
 
-        if (data.status === 'error') {
-            return ctx.reply('❌ خطأ: لم يتم العثور على الفيديو أو الرابط غير مدعوم.');
+        if (downloadUrl) {
+            await ctx.replyWithVideo({ url: downloadUrl });
+        } else {
+            ctx.reply('❌ تعذر الحصول على رابط التحميل.');
         }
-
-        // إرسال الفيديو مباشرة باستخدام الرابط الذي وفره الـ API
-        await ctx.replyWithVideo({ url: data.url });
-
     } catch (error) {
         console.error(error);
-        ctx.reply('❌ حدث خطأ أثناء الاتصال بخادم التحميل. حاول مجدداً.');
+        ctx.reply('❌ حدث خطأ، يرجى التأكد من أن الرابط صحيح.');
     }
 });
 
-// هذا الجزء للحفاظ على البوت نشطاً على Render
-const http = require('http');
+// إبقاء البوت نشطاً لـ Render
 http.createServer((req, res) => {
     res.writeHead(200);
     res.end('Bot is running');
