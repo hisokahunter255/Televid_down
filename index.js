@@ -1,46 +1,50 @@
 const { Telegraf } = require('telegraf');
-const { exec } = require('child_process');
-const fs = require('fs');
+const axios = require('axios');
 
-// التأكد من أن التوكن موجود في إعدادات البيئة
+// قراءة التوكن من إعدادات البيئة (Render Environment Variables)
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 bot.launch();
 console.log('Bot is running...');
 
-bot.on('text', (ctx) => {
+bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url.startsWith('http')) return;
 
-    ctx.reply('⏳ Processing and downloading...');
+    ctx.reply('⏳ جارٍ جلب الفيديو، يرجى الانتظار...');
 
-    const filename = `video_${Date.now()}.mp4`;
+    try {
+        // استخدام API الخاص بـ Cobalt للتحميل
+        const response = await axios.post('https://api.cobalt.tools/api/json', {
+            url: url,
+            vQuality: "720",
+            isAudioOnly: false,
+            disableMetadata: true
+        }, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
 
-    // تحديد الأداة حسب النظام (Linux vs Windows)
-    const isWindows = process.platform === 'win32';
-    const downloadTool = isWindows ? `".\\yt-dlp.exe"` : "yt-dlp";
+        const data = response.data;
 
-    // أمر تحميل يحاكي متصفحاً حقيقياً لتجاوز حماية يوتيوب
-    const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-    const fullCmd = `${downloadTool} --user-agent "${userAgent}" -f "best[ext=mp4]" -o "${filename}" "${url}"`;
-
-    exec(fullCmd, (error) => {
-        if (error) {
-            console.error(error);
-            return ctx.reply('❌ Error: Could not download the video. It might be age-restricted or private.');
+        if (data.status === 'error') {
+            return ctx.reply('❌ خطأ: لم يتم العثور على الفيديو أو الرابط غير مدعوم.');
         }
 
-        if (fs.existsSync(filename)) {
-            ctx.replyWithVideo({ source: fs.createReadStream(filename) })
-                .then(() => {
-                    fs.unlinkSync(filename);
-                })
-                .catch((err) => {
-                    console.error(err);
-                    ctx.reply('❌ Failed to send video to Telegram.');
-                });
-        } else {
-            ctx.reply('❌ Error: File was not created.');
-        }
-    });
+        // إرسال الفيديو مباشرة باستخدام الرابط الذي وفره الـ API
+        await ctx.replyWithVideo({ url: data.url });
+
+    } catch (error) {
+        console.error(error);
+        ctx.reply('❌ حدث خطأ أثناء الاتصال بخادم التحميل. حاول مجدداً.');
+    }
 });
+
+// هذا الجزء للحفاظ على البوت نشطاً على Render
+const http = require('http');
+http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('Bot is running');
+}).listen(process.env.PORT || 3000);
