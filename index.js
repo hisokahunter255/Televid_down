@@ -1,5 +1,5 @@
 const { Telegraf } = require('telegraf');
-const ytdl = require('ytdl-core'); // تأكد أنها مثبتة في package.json
+const axios = require('axios');
 const express = require('express');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -9,23 +9,26 @@ app.use(bot.webhookCallback('/webhook'));
 
 bot.on('text', async (ctx) => {
     const url = ctx.message.text;
-    if (!ytdl.validateURL(url)) {
-        return ctx.reply('❌ الرابط غير مدعوم أو غير صالح.');
-    }
+    if (!url || !url.startsWith('http')) return;
 
-    ctx.reply('⏳ جاري التحميل...');
+    ctx.reply('⏳ جارٍ تحويل الرابط...');
 
     try {
-        const info = await ytdl.getInfo(url);
-        const videoFormat = ytdl.chooseFormat(info.formats, { quality: 'highest' });
+        // نستخدم API خدمة Cobalt المحدثة (co.wuk.sh)
+        const response = await axios.post('https://co.wuk.sh/api/json', {
+            url: url,
+            vQuality: "720"
+        }, {
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }
+        });
 
-        if (videoFormat && videoFormat.url) {
-            await ctx.replyWithVideo({ url: videoFormat.url });
+        if (response.data && response.data.url) {
+            await ctx.replyWithVideo({ url: response.data.url });
         } else {
-            ctx.reply('❌ تعذر العثور على رابط تحميل مباشر.');
+            ctx.reply('❌ تعذر استخراج الرابط، جرب فيديو آخر.');
         }
     } catch (error) {
-        ctx.reply('❌ خطأ في التحميل: ' + error.message);
+        ctx.reply('❌ فشل الاتصال بخدمة التحويل، السيرفر قد يكون مشغولاً.');
     }
 });
 
