@@ -2,7 +2,7 @@
 const { exec } = require('child_process');
 const fs = require('fs');
 
-const bot = new Telegraf('process.env.BOT_TOKEN');
+const bot = new Telegraf('8881629412:AAEzSAM_J9cCaQikgQp49GeSLiUiDyysSpw');
 
 bot.launch();
 console.log('Bot is running...');
