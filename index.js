@@ -2,6 +2,7 @@ const { Telegraf } = require('telegraf');
 const { exec } = require('child_process');
 const fs = require('fs');
 
+// التأكد من أن التوكن موجود في إعدادات البيئة
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 bot.launch();
@@ -11,18 +12,22 @@ bot.on('text', (ctx) => {
     const url = ctx.message.text;
     if (!url.startsWith('http')) return;
 
-    ctx.reply('⏳ Processing...');
+    ctx.reply('⏳ Processing and downloading...');
 
     const filename = `video_${Date.now()}.mp4`;
 
-    // الكود ذكي: إذا كان ويندوز سيستخدم الملف، وإذا كان لينكس سيستخدم الأمر المباشر
+    // تحديد الأداة حسب النظام (Linux vs Windows)
     const isWindows = process.platform === 'win32';
-    const downloadCmd = isWindows ? `".\\yt-dlp.exe"` : "yt-dlp";
+    const downloadTool = isWindows ? `".\\yt-dlp.exe"` : "yt-dlp";
 
-    exec(`${downloadCmd} -f "best[ext=mp4]" -o "${filename}" "${url}"`, (error) => {
+    // أمر تحميل يحاكي متصفحاً حقيقياً لتجاوز حماية يوتيوب
+    const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    const fullCmd = `${downloadTool} --user-agent "${userAgent}" -f "best[ext=mp4]" -o "${filename}" "${url}"`;
+
+    exec(fullCmd, (error) => {
         if (error) {
-            console.log(error);
-            return ctx.reply('❌ Error during download.');
+            console.error(error);
+            return ctx.reply('❌ Error: Could not download the video. It might be age-restricted or private.');
         }
 
         if (fs.existsSync(filename)) {
@@ -31,11 +36,11 @@ bot.on('text', (ctx) => {
                     fs.unlinkSync(filename);
                 })
                 .catch((err) => {
-                    console.log(err);
-                    ctx.reply('❌ Failed to send.');
+                    console.error(err);
+                    ctx.reply('❌ Failed to send video to Telegram.');
                 });
         } else {
-            ctx.reply('❌ File not found.');
+            ctx.reply('❌ Error: File was not created.');
         }
     });
 });
