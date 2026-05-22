@@ -1,46 +1,114 @@
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
 const express = require('express');
+const { exec } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
 
+app.use(express.json());
 app.use(bot.webhookCallback('/webhook'));
 
-bot.on('text', async (ctx) => {
-    const url = ctx.message.text;
-    if (!url || !url.startsWith('http')) return;
+// ضبط الـ webhook
+if (process.env.WEBHOOK_URL) {
+    bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/webhook`);
+}
 
-    ctx.reply('⏳ جارٍ المعالجة، انتظر قليلاً...');
+// دالة لتحميل الفيديو بـ yt-dlp وإرساله
+async function downloadAndSend(ctx, url) {
+    const filename = `video_${Date.now()}.mp4`;
+    const filepath = path.join('/tmp', filename);
 
-    try {
-        // المحاولة الأولى: استخدام Cobalt مع تعريف متصفح حقيقي لتجاوز قيود يوتيوب
-        const response = await axios.post('https://api.cobalt.tools/api/json', {
-            url: url,
-            vQuality: "720",
-            downloadMode: "auto"
-        }, {
-            headers: { 
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    return new Promise((resolve, reject) => {
+        // تحميل بجودة مناسبة مع دمج الصوت والفيديو
+        const cmd = `yt-dlp -f "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best" --merge-output-format mp4 -o "${filepath}" "${url}"`;
+        
+        exec(cmd, async (error, stdout, stderr) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            try {
+                const stats = fs.statSync(filepath);
+                const fileSizeMB = stats.size / (1024 * 1024);
+
+                if (fileSizeMB > 50) {
+                    // لو أكبر من 50MB، ابعت رابط مباشر بدل الملف
+                    exec(`yt-dlp -g "${url}"`, async (err, out) => {
+                        fs.unlinkSync(filepath);
+                        if (err) {
+                            await ctx.reply('❌ الفيديو كبير جداً ولا يمكن إرساله.');
+                        } else {
+                            await ctx.reply('⚠️ الفيديو أكبر من 50MB، إليك الرابط المباشر:\n' + out.trim().split('\n')[0]);
+                        }
+                        resolve();
+                    });
+                } else {
+                    // إرسال الملف مباشرة
+                    await ctx.replyWithVideo({ source: filepath });
+                    fs.unlinkSync(filepath);
+                    resolve();
+                }
+            } catch (e) {
+                if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+                reject(e);
             }
         });
+    });
+}
 
-        if (response.data && response.data.url) {
-            await ctx.replyWithVideo({ url: response.data.url });
-        } 
-        // المحاولة الثانية: إذا كان تيك توك ولم ينجح Cobalt
-        else if (url.includes('tiktok.com')) {
-            const tiktokRes = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
-            await ctx.replyWithVideo({ url: tiktokRes.data.data.play });
+bot.on('text', async (ctx) => {
+    const url = ctx.message.text.trim();
+    if (!url.startsWith('http')) return;
+
+    await ctx.reply('⏳ جارٍ المعالجة...');
+
+    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+    const isTikTok = url.includes('tiktok.com');
+
+    try {
+        if (isYouTube) {
+            // YouTube: yt-dlp مباشرة
+            await downloadAndSend(ctx, url);
+
+        } else if (isTikTok) {
+            // TikTok: جرب TikWM الأول لأنه أسرع
+            try {
+                const tik = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+                if (tik.data?.data?.play) {
+                    await ctx.replyWithVideo({ url: tik.data.data.play });
+                } else {
+                    throw new Error('No URL from TikWM');
+                }
+            } catch {
+                // fallback لـ yt-dlp
+                await downloadAndSend(ctx, url);
+            }
+
+        } else {
+            // باقي المواقع: جرب Cobalt الأول
+            try {
+                const response = await axios.post('https://cobalt.tools/api/json',
+                    { url, vQuality: "720" },
+                    { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' } }
+                );
+                if (response.data?.url) {
+                    await ctx.replyWithVideo({ url: response.data.url });
+                } else {
+                    throw new Error('No URL from Cobalt');
+                }
+            } catch {
+                // fallback لـ yt-dlp
+                await downloadAndSend(ctx, url);
+            }
         }
-        else {
-            ctx.reply('❌ تعذر التحميل، الرابط قد يكون خاصاً أو يوتيوب قام بحظر الطلب.');
-        }
+
     } catch (error) {
-        console.error("Final Error:", error.message);
-        ctx.reply('❌ تعذر التحميل. الخدمة قد تكون غير متاحة حالياً لهذا الفيديو.');
+        console.error(error);
+        await ctx.reply('❌ تعذر التحميل. الرابط غير مدعوم أو خاص.');
     }
 });
 
