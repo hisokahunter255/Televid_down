@@ -15,11 +15,11 @@ bot.on('text', (ctx) => {
 
     const filename = `video_${Date.now()}.mp4`;
 
-    exec(`".\\yt-dlp.exe" -f "best[ext=mp4]" -o "${filename}" "${url}"`, (error) => {
-        if (error) {
-            console.log(error);
-            return ctx.reply('❌ Error during download.');
-        }
+const isWindows = process.platform === 'win32';
+const downloadCmd = isWindows ? ".\\yt-dlp.exe" : "yt-dlp";
+
+exec(`${downloadCmd} -f "best[ext=mp4]" -o "${filename}" "${url}"`, (error) => {
+});
 
         if (fs.existsSync(filename)) {
             ctx.replyWithVideo({ source: fs.createReadStream(filename) })
