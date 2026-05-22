@@ -8,7 +8,8 @@
   "dependencies": {
     "telegraf": "^4.16.3",
     "ytdl-core": "^4.11.5",
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "axios": "^1.6.0"
   },
   "engines": {
     "node": "24.x"
