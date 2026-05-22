@@ -1,5 +1,5 @@
 const { Telegraf } = require('telegraf');
-const axios = require('axios');
+const { exec } = require('child_process');
 const express = require('express');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -11,23 +11,24 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url || !url.startsWith('http')) return;
 
-    ctx.reply('⏳ جاري التحميل...');
+    ctx.reply('⏳ جاري التحميل باستخدام yt-dlp...');
 
-    try {
-        // نستخدم خدمة API بديلة قوية
-        const response = await axios.get(`https://api.snapvid.xyz/api?url=${encodeURIComponent(url)}`);
-
-        // نطبع الرد في الـ Logs لنرى ماذا يرسل الموقع (للتصحيح)
-        console.log("API Response:", JSON.stringify(response.data));
-
-        if (response.data && response.data.video) {
-            await ctx.replyWithVideo({ url: response.data.video });
-        } else {
-            ctx.reply('❌ لم أستطع العثور على رابط التحميل. جرب فيديو آخر.');
+    // استخدام yt-dlp لاستخراج رابط الفيديو المباشر
+    exec(`yt-dlp -g "${url}"`, (error, stdout, stderr) => {
+        if (error) {
+            ctx.reply('❌ فشل استخراج الرابط. تأكد أن الرابط عام.');
+            return;
         }
-    } catch (error) {
-        ctx.reply('❌ خطأ في الاتصال بالسيرفر.');
-    }
+        
+        const videoUrl = stdout.trim();
+        if (videoUrl) {
+            ctx.replyWithVideo({ url: videoUrl }).catch(() => {
+                ctx.reply('الفيديو كبير جداً، إليك الرابط المباشر:\n' + videoUrl);
+            });
+        } else {
+            ctx.reply('❌ لم أجد رابطاً.');
+        }
+    });
 });
 
 const PORT = process.env.PORT || 3000;
