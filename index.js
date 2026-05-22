@@ -1,5 +1,5 @@
 const { Telegraf } = require('telegraf');
-const { exec } = require('child_process');
+const axios = require('axios');
 const express = require('express');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -11,25 +11,32 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url || !url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ التحميل...');
+    ctx.reply('⏳ جارٍ التحميل من Cobalt...');
 
-    // استخدام yt-dlp لاستخراج الرابط المباشر
-    // --get-url هي الخاصية الأقوى لاستخراج رابط الفيديو المباشر
-    exec(`yt-dlp --get-url "${url}"`, (error, stdout, stderr) => {
-        if (error) {
-            ctx.reply('❌ تعذر التحميل. الرابط غير مدعوم أو خاص.');
-            return;
-        }
-        
-        const videoUrl = stdout.trim();
-        if (videoUrl) {
-            ctx.replyWithVideo({ url: videoUrl }).catch(() => {
-                ctx.reply('الفيديو متاح عبر هذا الرابط:\n' + videoUrl);
-            });
+    try {
+        // نستخدم خادم Cobalt العام المباشر
+        // التعديل هنا: نرسل الطلب كرابط GET بسيط لضمان التوافق
+        const api = `https://co.wuk.sh/api/json`;
+        const response = await axios.post(api, {
+            url: url,
+            vQuality: "720"
+        }, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.data && response.data.url) {
+            await ctx.replyWithVideo({ url: response.data.url });
         } else {
-            ctx.reply('❌ لم يتم العثور على رابط صالح.');
+            ctx.reply('❌ تعذر استخراج الفيديو. جرب رابطاً آخر.');
         }
-    });
+    } catch (error) {
+        // هنا سنعرف السبب الحقيقي إذا كان السيرفر يرفض الطلب
+        console.error("Error:", error.response ? error.response.data : error.message);
+        ctx.reply('❌ فشل التحميل. قد يكون الرابط خاصاً أو محظوراً.');
+    }
 });
 
 const PORT = process.env.PORT || 3000;
