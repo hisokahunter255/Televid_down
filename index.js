@@ -11,33 +11,36 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url || !url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ المعالجة...');
+    ctx.reply('⏳ جارٍ المعالجة، انتظر قليلاً...');
 
     try {
-        // نستخدم الرابط الرسمي والمستقر حالياً
+        // المحاولة الأولى: استخدام Cobalt مع تعريف متصفح حقيقي لتجاوز قيود يوتيوب
         const response = await axios.post('https://api.cobalt.tools/api/json', {
             url: url,
-            vQuality: "720"
+            vQuality: "720",
+            downloadMode: "auto"
         }, {
             headers: { 
                 'Accept': 'application/json',
-                'Content-Type': 'application/json' 
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
         });
 
         if (response.data && response.data.url) {
             await ctx.replyWithVideo({ url: response.data.url });
-        } else {
-            ctx.reply('❌ تعذر استخراج الفيديو.');
+        } 
+        // المحاولة الثانية: إذا كان تيك توك ولم ينجح Cobalt
+        else if (url.includes('tiktok.com')) {
+            const tiktokRes = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+            await ctx.replyWithVideo({ url: tiktokRes.data.data.play });
+        }
+        else {
+            ctx.reply('❌ تعذر التحميل، الرابط قد يكون خاصاً أو يوتيوب قام بحظر الطلب.');
         }
     } catch (error) {
-        // في حال فشل Cobalt، نجرب الطريقة البديلة المباشرة (TikWM)
-        if (url.includes('tiktok.com')) {
-            const tik = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
-            await ctx.replyWithVideo({ url: tik.data.data.play });
-        } else {
-            ctx.reply('❌ تعذر التحميل، الرابط قد لا يكون مدعوماً.');
-        }
+        console.error("Final Error:", error.message);
+        ctx.reply('❌ تعذر التحميل. الخدمة قد تكون غير متاحة حالياً لهذا الفيديو.');
     }
 });
 
