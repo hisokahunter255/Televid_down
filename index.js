@@ -15,7 +15,6 @@ if (process.env.WEBHOOK_URL) {
     bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/webhook`);
 }
 
-// أمر التست
 bot.command('test', async (ctx) => {
     exec('yt-dlp --version', async (error, stdout, stderr) => {
         if (error) {
@@ -26,7 +25,6 @@ bot.command('test', async (ctx) => {
     });
 });
 
-// تحميل بـ yt-dlp للمواقع غير YouTube
 async function downloadAndSend(ctx, url) {
     const filename = `video_${Date.now()}.mp4`;
     const filepath = path.join('/tmp', filename);
@@ -67,7 +65,6 @@ async function downloadAndSend(ctx, url) {
     });
 }
 
-// تحميل من YouTube بـ RapidAPI
 async function downloadYouTube(ctx, url) {
     const videoId = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
     if (!videoId) {
@@ -84,29 +81,36 @@ async function downloadYouTube(ctx, url) {
             }
         });
 
-        const formats = response.data?.formats || [];
+        console.log('RapidAPI response:', JSON.stringify(response.data));
 
-        // جرب 720p الأول، لو مش موجودة خد أي فيديو
-        const videoFormat =
-            formats.find(f => f.qualityLabel === '720p' && f.mimeType?.includes('video/mp4')) ||
-            formats.find(f => f.mimeType?.includes('video/mp4')) ||
-            formats[0];
+        const data = response.data;
+        let videoUrl = null;
 
-        if (!videoFormat?.url) {
+        if (data?.url) {
+            videoUrl = data.url;
+        } else if (data?.formats && data.formats.length > 0) {
+            const fmt =
+                data.formats.find(f => f.qualityLabel === '720p' && f.mimeType?.includes('video')) ||
+                data.formats.find(f => f.mimeType?.includes('video')) ||
+                data.formats[0];
+            videoUrl = fmt?.url;
+        } else if (data?.adaptiveFormats && data.adaptiveFormats.length > 0) {
+            const fmt =
+                data.adaptiveFormats.find(f => f.qualityLabel === '720p') ||
+                data.adaptiveFormats.find(f => f.mimeType?.includes('video/mp4')) ||
+                data.adaptiveFormats[0];
+            videoUrl = fmt?.url;
+        }
+
+        if (!videoUrl) {
+            console.log('No video URL found in:', JSON.stringify(data));
             await ctx.reply('❌ لم يتم العثور على رابط للفيديو.');
             return;
         }
 
-        // تحقق من حجم الفيديو
-        const headRes = await axios.head(videoFormat.url).catch(() => null);
-        const contentLength = headRes?.headers?.['content-length'];
-        const fileSizeMB = contentLength ? parseInt(contentLength) / (1024 * 1024) : 0;
-
-        if (fileSizeMB > 50) {
-            await ctx.reply('⚠️ الفيديو أكبر من 50MB، إليك الرابط المباشر:\n' + videoFormat.url);
-        } else {
-            await ctx.replyWithVideo({ url: videoFormat.url });
-        }
+        await ctx.replyWithVideo({ url: videoUrl }).catch(async () => {
+            await ctx.reply('🔗 رابط الفيديو المباشر:\n' + videoUrl);
+        });
 
     } catch (error) {
         console.error('YouTube error:', error?.response?.data || error.message);
