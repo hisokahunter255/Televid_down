@@ -11,19 +11,35 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url || !url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ معالجة طلبك...');
+    ctx.reply('⏳ جارٍ معالجة الفيديو...');
 
     try {
-        // نستخدم خدمة API مجانية ومستقرة للروابط
-        const response = await axios.get(`https://api.tikwm.com/api/?url=${encodeURIComponent(url)}`);
-        
-        if (response.data && response.data.data && response.data.data.play) {
-            await ctx.replyWithVideo({ url: response.data.data.play });
-        } else {
-            ctx.reply('❌ لم أجد رابط تحميل صالح. جرب رابط تيك توك.');
+        // المحاولة الأولى: استخدام Cobalt القوي (يدعم يوتيوب وتيك توك)
+        const response = await axios.post('https://api.cobalt.tools/api/json', {
+            url: url,
+            vQuality: "720"
+        }, {
+            headers: { 
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0'
+            }
+        });
+
+        if (response.data && response.data.url) {
+            await ctx.replyWithVideo({ url: response.data.url });
+        } 
+        // المحاولة الثانية (احتياطية لتيك توك فقط)
+        else if (url.includes('tiktok.com')) {
+            const tiktokRes = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+            await ctx.replyWithVideo({ url: tiktokRes.data.data.play });
+        }
+        else {
+            ctx.reply('❌ تعذر استخراج الرابط من يوتيوب، الرابط قد يكون مقيداً.');
         }
     } catch (error) {
-        ctx.reply('❌ خطأ في الاتصال بالسيرفر. حاول لاحقاً.');
+        console.error("Final Error:", error.message);
+        ctx.reply('❌ تعذر التحميل، الخدمة قد تكون محظورة لهذا الفيديو.');
     }
 });
 
