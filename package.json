@@ -1,17 +1,16 @@
 {
-  "name": "my-telegram-bot",
+  "name": "telegram-bot",
   "version": "1.0.0",
-  "description": "",
+  "description": "Video downloader bot",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "telegraf": "^4.16.3",
-    "ytdl-core": "^4.11.5"
+    "telegraf": "^4.16.0",
+    "axios": "^1.6.0"
+  },
+  "engines": {
+    "node": "24.x"
   }
 }
