@@ -26,13 +26,14 @@ bot.command('test', async (ctx) => {
     });
 });
 
+// تحميل بـ yt-dlp للمواقع غير YouTube
 async function downloadAndSend(ctx, url) {
     const filename = `video_${Date.now()}.mp4`;
     const filepath = path.join('/tmp', filename);
 
     return new Promise((resolve, reject) => {
         const cmd = `yt-dlp -f "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best" --merge-output-format mp4 -o "${filepath}" "${url}"`;
-        
+
         exec(cmd, async (error, stdout, stderr) => {
             if (error) {
                 reject(error);
@@ -66,6 +67,53 @@ async function downloadAndSend(ctx, url) {
     });
 }
 
+// تحميل من YouTube بـ RapidAPI
+async function downloadYouTube(ctx, url) {
+    const videoId = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
+    if (!videoId) {
+        await ctx.reply('❌ رابط YouTube غير صحيح.');
+        return;
+    }
+
+    try {
+        const response = await axios.get('https://yt-api.p.rapidapi.com/dl', {
+            params: { id: videoId, cgeo: 'US' },
+            headers: {
+                'x-rapidapi-host': 'yt-api.p.rapidapi.com',
+                'x-rapidapi-key': process.env.RAPIDAPI_KEY
+            }
+        });
+
+        const formats = response.data?.formats || [];
+
+        // جرب 720p الأول، لو مش موجودة خد أي فيديو
+        const videoFormat =
+            formats.find(f => f.qualityLabel === '720p' && f.mimeType?.includes('video/mp4')) ||
+            formats.find(f => f.mimeType?.includes('video/mp4')) ||
+            formats[0];
+
+        if (!videoFormat?.url) {
+            await ctx.reply('❌ لم يتم العثور على رابط للفيديو.');
+            return;
+        }
+
+        // تحقق من حجم الفيديو
+        const headRes = await axios.head(videoFormat.url).catch(() => null);
+        const contentLength = headRes?.headers?.['content-length'];
+        const fileSizeMB = contentLength ? parseInt(contentLength) / (1024 * 1024) : 0;
+
+        if (fileSizeMB > 50) {
+            await ctx.reply('⚠️ الفيديو أكبر من 50MB، إليك الرابط المباشر:\n' + videoFormat.url);
+        } else {
+            await ctx.replyWithVideo({ url: videoFormat.url });
+        }
+
+    } catch (error) {
+        console.error('YouTube error:', error?.response?.data || error.message);
+        await ctx.reply('❌ تعذر تحميل الفيديو من YouTube.');
+    }
+}
+
 bot.on('text', async (ctx) => {
     const url = ctx.message.text.trim();
     if (!url.startsWith('http')) return;
@@ -77,7 +125,7 @@ bot.on('text', async (ctx) => {
 
     try {
         if (isYouTube) {
-            await downloadAndSend(ctx, url);
+            await downloadYouTube(ctx, url);
 
         } else if (isTikTok) {
             try {
@@ -102,6 +150,21 @@ bot.on('text', async (ctx) => {
                 } else {
                     throw new Error('No URL from Cobalt');
                 }
+            } catch {
+                await downloadAndSend(ctx, url);
+            }
+        }
+
+    } catch (error) {
+        console.error(error);
+        await ctx.reply('❌ تعذر التحميل. الرابط غير مدعوم أو خاص.');
+    }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});                }
             } catch {
                 await downloadAndSend(ctx, url);
             }
