@@ -11,18 +11,26 @@ const app = express();
 app.use(express.json());
 app.use(bot.webhookCallback('/webhook'));
 
-// ضبط الـ webhook
 if (process.env.WEBHOOK_URL) {
     bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/webhook`);
 }
 
-// دالة لتحميل الفيديو بـ yt-dlp وإرساله
+// أمر التست
+bot.command('test', async (ctx) => {
+    exec('yt-dlp --version', async (error, stdout, stderr) => {
+        if (error) {
+            await ctx.reply('❌ yt-dlp غير مثبت:\n' + stderr);
+        } else {
+            await ctx.reply('✅ yt-dlp مثبت: ' + stdout.trim());
+        }
+    });
+});
+
 async function downloadAndSend(ctx, url) {
     const filename = `video_${Date.now()}.mp4`;
     const filepath = path.join('/tmp', filename);
 
     return new Promise((resolve, reject) => {
-        // تحميل بجودة مناسبة مع دمج الصوت والفيديو
         const cmd = `yt-dlp -f "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best" --merge-output-format mp4 -o "${filepath}" "${url}"`;
         
         exec(cmd, async (error, stdout, stderr) => {
@@ -36,7 +44,6 @@ async function downloadAndSend(ctx, url) {
                 const fileSizeMB = stats.size / (1024 * 1024);
 
                 if (fileSizeMB > 50) {
-                    // لو أكبر من 50MB، ابعت رابط مباشر بدل الملف
                     exec(`yt-dlp -g "${url}"`, async (err, out) => {
                         fs.unlinkSync(filepath);
                         if (err) {
@@ -47,7 +54,6 @@ async function downloadAndSend(ctx, url) {
                         resolve();
                     });
                 } else {
-                    // إرسال الملف مباشرة
                     await ctx.replyWithVideo({ source: filepath });
                     fs.unlinkSync(filepath);
                     resolve();
@@ -71,11 +77,9 @@ bot.on('text', async (ctx) => {
 
     try {
         if (isYouTube) {
-            // YouTube: yt-dlp مباشرة
             await downloadAndSend(ctx, url);
 
         } else if (isTikTok) {
-            // TikTok: جرب TikWM الأول لأنه أسرع
             try {
                 const tik = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
                 if (tik.data?.data?.play) {
@@ -84,12 +88,10 @@ bot.on('text', async (ctx) => {
                     throw new Error('No URL from TikWM');
                 }
             } catch {
-                // fallback لـ yt-dlp
                 await downloadAndSend(ctx, url);
             }
 
         } else {
-            // باقي المواقع: جرب Cobalt الأول
             try {
                 const response = await axios.post('https://cobalt.tools/api/json',
                     { url, vQuality: "720" },
@@ -101,7 +103,20 @@ bot.on('text', async (ctx) => {
                     throw new Error('No URL from Cobalt');
                 }
             } catch {
-                // fallback لـ yt-dlp
+                await downloadAndSend(ctx, url);
+            }
+        }
+
+    } catch (error) {
+        console.error(error);
+        await ctx.reply('❌ تعذر التحميل. الرابط غير مدعوم أو خاص.');
+    }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});                // fallback لـ yt-dlp
                 await downloadAndSend(ctx, url);
             }
         }
