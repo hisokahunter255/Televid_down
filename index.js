@@ -11,31 +11,33 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url || !url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ التحميل من Cobalt...');
+    ctx.reply('⏳ جارٍ المعالجة...');
 
     try {
-        // نستخدم خادم Cobalt العام المباشر
-        // التعديل هنا: نرسل الطلب كرابط GET بسيط لضمان التوافق
-        const api = `https://co.wuk.sh/api/json`;
-        const response = await axios.post(api, {
+        // نستخدم الرابط الرسمي والمستقر حالياً
+        const response = await axios.post('https://api.cobalt.tools/api/json', {
             url: url,
             vQuality: "720"
         }, {
-            headers: {
+            headers: { 
                 'Accept': 'application/json',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json' 
             }
         });
 
         if (response.data && response.data.url) {
             await ctx.replyWithVideo({ url: response.data.url });
         } else {
-            ctx.reply('❌ تعذر استخراج الفيديو. جرب رابطاً آخر.');
+            ctx.reply('❌ تعذر استخراج الفيديو.');
         }
     } catch (error) {
-        // هنا سنعرف السبب الحقيقي إذا كان السيرفر يرفض الطلب
-        console.error("Error:", error.response ? error.response.data : error.message);
-        ctx.reply('❌ فشل التحميل. قد يكون الرابط خاصاً أو محظوراً.');
+        // في حال فشل Cobalt، نجرب الطريقة البديلة المباشرة (TikWM)
+        if (url.includes('tiktok.com')) {
+            const tik = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+            await ctx.replyWithVideo({ url: tik.data.data.play });
+        } else {
+            ctx.reply('❌ تعذر التحميل، الرابط قد لا يكون مدعوماً.');
+        }
     }
 });
 
