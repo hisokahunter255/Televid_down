@@ -11,19 +11,22 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url || !url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ معالجة الفيديو من خادم جديد...');
+    ctx.reply('⏳ جاري التحميل...');
 
     try {
-        // نستخدم API بديل (TikWM) يعمل حالياً للتحميل المباشر
-        const response = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+        // نستخدم خدمة API بديلة قوية
+        const response = await axios.get(`https://api.snapvid.xyz/api?url=${encodeURIComponent(url)}`);
 
-        if (response.data && response.data.data && response.data.data.play) {
-            await ctx.replyWithVideo({ url: response.data.data.play });
+        // نطبع الرد في الـ Logs لنرى ماذا يرسل الموقع (للتصحيح)
+        console.log("API Response:", JSON.stringify(response.data));
+
+        if (response.data && response.data.video) {
+            await ctx.replyWithVideo({ url: response.data.video });
         } else {
-            ctx.reply('❌ تعذر استخراج الفيديو. جرب رابطاً آخر (تأكد أنه تيك توك أو يوتيوب).');
+            ctx.reply('❌ لم أستطع العثور على رابط التحميل. جرب فيديو آخر.');
         }
     } catch (error) {
-        ctx.reply('❌ فشل الاتصال بخادم التحميل. حاول مجدداً.');
+        ctx.reply('❌ خطأ في الاتصال بالسيرفر.');
     }
 });
 
