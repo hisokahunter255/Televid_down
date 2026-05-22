@@ -18,7 +18,7 @@ bot.on('text', (ctx) => {
 const isWindows = process.platform === 'win32';
 const downloadCmd = isWindows ? ".\\yt-dlp.exe" : "yt-dlp";
 
-exec(`${downloadCmd} -f "best[ext=mp4]" -o "${filename}" "${url}"`, (error) => {
+exec(`yt-dlp -f "best[ext=mp4]" -o "${filename}" "${url}"`, (error) => {
 });
 
         if (fs.existsSync(filename)) {
