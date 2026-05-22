@@ -1,8 +1,8 @@
-    const { Telegraf } = require('telegraf');
+const { Telegraf } = require('telegraf');
 const { exec } = require('child_process');
 const fs = require('fs');
 
-const bot = new Telegraf('8881629412:AAEzSAM_J9cCaQikgQp49GeSLiUiDyysSpw');
+const bot = new Telegraf(process.env.BOT_TOKEN);
 
 bot.launch();
 console.log('Bot is running...');
@@ -15,11 +15,15 @@ bot.on('text', (ctx) => {
 
     const filename = `video_${Date.now()}.mp4`;
 
-const isWindows = process.platform === 'win32';
-const downloadCmd = isWindows ? ".\\yt-dlp.exe" : "yt-dlp";
+    // الكود ذكي: إذا كان ويندوز سيستخدم الملف، وإذا كان لينكس سيستخدم الأمر المباشر
+    const isWindows = process.platform === 'win32';
+    const downloadCmd = isWindows ? `".\\yt-dlp.exe"` : "yt-dlp";
 
-exec(`yt-dlp -f "best[ext=mp4]" -o "${filename}" "${url}"`, (error) => {
-});
+    exec(`${downloadCmd} -f "best[ext=mp4]" -o "${filename}" "${url}"`, (error) => {
+        if (error) {
+            console.log(error);
+            return ctx.reply('❌ Error during download.');
+        }
 
         if (fs.existsSync(filename)) {
             ctx.replyWithVideo({ source: fs.createReadStream(filename) })
