@@ -11,24 +11,23 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url || !url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ تحويل الرابط...');
+    ctx.reply('⏳ جارٍ المعالجة...');
 
     try {
-        // نستخدم API خدمة Cobalt المحدثة (co.wuk.sh)
-        const response = await axios.post('https://co.wuk.sh/api/json', {
-            url: url,
-            vQuality: "720"
-        }, {
-            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }
-        });
-
-        if (response.data && response.data.url) {
+        // إذا كان الرابط تيك توك
+        if (url.includes('tiktok.com')) {
+            const response = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+            await ctx.replyWithVideo({ url: response.data.data.play });
+        } 
+        // إذا كان يوتيوب
+        else {
+            // نستخدم خدمة ytdl-api مباشرة للروابط العامة
+            const response = await axios.get(`https://api.ytdl.is/v1/video/download?url=${encodeURIComponent(url)}`);
             await ctx.replyWithVideo({ url: response.data.url });
-        } else {
-            ctx.reply('❌ تعذر استخراج الرابط، جرب فيديو آخر.');
         }
     } catch (error) {
-        ctx.reply('❌ فشل الاتصال بخدمة التحويل، السيرفر قد يكون مشغولاً.');
+        console.error("Final Error:", error.message);
+        ctx.reply('❌ تعذر التحميل. الخدمة قد تكون غير متاحة لهذا الفيديو حالياً.');
     }
 });
 
