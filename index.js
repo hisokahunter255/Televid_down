@@ -11,34 +11,23 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url || !url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ جلب الفيديو، انتظر قليلاً...');
+    ctx.reply('⏳ جارٍ معالجة الفيديو من خادم جديد...');
 
     try {
-        const response = await axios.post('https://api.cobalt.tools/api/json', {
-            url: url,
-            vQuality: "720"
-        }, {
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0'
-            }
-        });
+        // نستخدم API بديل (TikWM) يعمل حالياً للتحميل المباشر
+        const response = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
 
-        // إذا كان الرد ناجحاً
-        if (response.data && response.data.url) {
-            await ctx.replyWithVideo({ url: response.data.url });
+        if (response.data && response.data.data && response.data.data.play) {
+            await ctx.replyWithVideo({ url: response.data.data.play });
         } else {
-            ctx.reply('❌ لم أجد رابط تحميل للفيديو. جرب رابطاً آخر.');
+            ctx.reply('❌ تعذر استخراج الفيديو. جرب رابطاً آخر (تأكد أنه تيك توك أو يوتيوب).');
         }
     } catch (error) {
-        // إذا فشل الطلب، سنطبع الخطأ الحقيقي لنعرف السبب
-        const errorMsg = error.response ? JSON.stringify(error.response.data) : error.message;
-        ctx.reply('❌ فشل التحميل: ' + errorMsg);
+        ctx.reply('❌ فشل الاتصال بخادم التحميل. حاول مجدداً.');
     }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
