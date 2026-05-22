@@ -11,36 +11,25 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text;
     if (!url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ معالجة الفيديو...');
+    ctx.reply('⏳ جارٍ تحويل الرابط، انتظر قليلاً...');
 
     try {
-        // نستخدم API خدمة Cobalt المجانية والقوية للتحميل
-        const response = await axios.post('https://api.cobalt.tools/api/json', {
-            url: url,
-            vQuality: "720",
-            filenameStyle: "classic"
-        }, {
-            headers: { 
-                'Accept': 'application/json',
-                'Content-Type': 'application/json' 
-            }
-        });
+        // نستخدم API بديل يعمل بكفاءة للتحميل
+        const response = await axios.get(`https://api.douyin.wtf/api?url=${encodeURIComponent(url)}`);
+        
+        const videoUrl = response.data.video_data.nwm_video_url_HQ || response.data.video_data.nwm_video_url;
 
-        // الـ API سيرد برابط مباشر للفيديو
-        const downloadUrl = response.data.url;
-
-        if (downloadUrl) {
-            await ctx.replyWithVideo({ url: downloadUrl });
+        if (videoUrl) {
+            await ctx.replyWithVideo({ url: videoUrl });
         } else {
-            ctx.reply('❌ تعذر الحصول على رابط التحميل.');
+            ctx.reply('❌ لم أتمكن من استخراج الفيديو، حاول رابطاً آخر.');
         }
     } catch (error) {
         console.error(error);
-        ctx.reply('❌ حدث خطأ، يرجى التأكد من أن الرابط صحيح.');
+        ctx.reply('❌ حدث خطأ في الاتصال بخادم التحميل.');
     }
 });
 
-// إبقاء البوت نشطاً لـ Render
 http.createServer((req, res) => {
     res.writeHead(200);
     res.end('Bot is running');
