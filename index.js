@@ -36,53 +36,57 @@ bot.command('testcookies', async (ctx) => {
 });
 
 async function downloadYouTube(ctx, url) {
-    const filename = `video_${Date.now()}.mp4`;
-    const filepath = path.join('/tmp', filename);
+    const videoId = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
+    if (!videoId) {
+        await ctx.reply('❌ رابط YouTube غير صحيح.');
+        return;
+    }
 
-    return new Promise((resolve, reject) => {
-        const cookiesSource = '/etc/secrets/cookies.txt';
-        const cookiesCopy = '/tmp/cookies.txt';
+    try {
+        const instances = [
+            'https://invidious.snopyta.org',
+            'https://vid.puffyan.us',
+            'https://invidious.kavin.rocks'
+        ];
 
-        if (fs.existsSync(cookiesSource) && !fs.existsSync(cookiesCopy)) {
-            fs.copyFileSync(cookiesSource, cookiesCopy);
+        let videoUrl = null;
+
+        for (const instance of instances) {
+            try {
+                const res = await axios.get(`${instance}/api/v1/videos/${videoId}`, {
+                    timeout: 10000
+                });
+
+                const formats = res.data?.formatStreams || [];
+
+                const fmt =
+                    formats.find(f => f.qualityLabel === '720p') ||
+                    formats.find(f => f.qualityLabel === '480p') ||
+                    formats.find(f => f.qualityLabel === '360p') ||
+                    formats[0];
+
+                if (fmt?.url) {
+                    videoUrl = fmt.url;
+                    break;
+                }
+            } catch {
+                continue;
+            }
         }
 
-        const cookiesFlag = fs.existsSync(cookiesCopy) ? `--cookies "${cookiesCopy}"` : '';
+        if (!videoUrl) {
+            await ctx.reply('❌ لم يتم العثور على رابط للفيديو.');
+            return;
+        }
 
-        const cmd = `yt-dlp ${cookiesFlag} -f "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best" --merge-output-format mp4 -o "${filepath}" "${url}"`;
-
-        exec(cmd, async (error, stdout, stderr) => {
-            if (error) {
-                console.error('yt-dlp YouTube error:', stderr);
-                reject(error);
-                return;
-            }
-
-            try {
-                const stats = fs.statSync(filepath);
-                const fileSizeMB = stats.size / (1024 * 1024);
-
-                if (fileSizeMB > 50) {
-                    exec(`yt-dlp ${cookiesFlag} -g "${url}"`, async (err, out) => {
-                        fs.unlinkSync(filepath);
-                        if (err) {
-                            await ctx.reply('❌ الفيديو كبير جداً ولا يمكن إرساله.');
-                        } else {
-                            await ctx.reply('⚠️ الفيديو أكبر من 50MB، إليك الرابط المباشر:\n' + out.trim().split('\n')[0]);
-                        }
-                        resolve();
-                    });
-                } else {
-                    await ctx.replyWithVideo({ source: filepath });
-                    fs.unlinkSync(filepath);
-                    resolve();
-                }
-            } catch (e) {
-                if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
-                reject(e);
-            }
+        await ctx.replyWithVideo({ url: videoUrl }).catch(async () => {
+            await ctx.reply('🔗 رابط الفيديو المباشر:\n' + videoUrl);
         });
-    });
+
+    } catch (error) {
+        console.error('YouTube error:', error.message);
+        await ctx.reply('❌ تعذر تحميل الفيديو من YouTube.');
+    }
 }
 
 async function downloadAndSend(ctx, url) {
