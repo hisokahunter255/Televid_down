@@ -1,7 +1,6 @@
 const { Telegraf } = require('telegraf');
-const { exec } = require('child_process');
+const axios = require('axios');
 const express = require('express');
-const fs = require('fs');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
@@ -12,26 +11,32 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text.trim();
     if (!url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ المعالجة بواسطة المحرك الداخلي...');
+    ctx.reply('⏳ جارٍ المعالجة...');
 
-    // استخدام yt-dlp لاستخراج رابط مباشر بدلاً من تحميل الفيديو بالكامل
-    // استخدام --get-url هو الأسرع والأكثر استقراراً
-    exec(`yt-dlp --get-url --format "best[ext=mp4][height<=720]" "${url}"`, (error, stdout, stderr) => {
-        if (error) {
-            ctx.reply('❌ فشل الاستخراج، قد يكون الفيديو مقيداً أو خاصاً.');
-            console.error("yt-dlp error:", stderr);
-            return;
-        }
+    try {
+        // نستخدم الـ API الرسمي لخدمة Cobalt
+        // هو الخادم الوحيد الذي يمتلك ملفات Cookies جاهزة على سيرفراتهم
+        const response = await axios.post('https://api.cobalt.tools/api/json', {
+            url: url,
+            vQuality: "720",
+            downloadMode: "auto"
+        }, {
+            headers: { 
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0'
+            }
+        });
 
-        const videoUrl = stdout.trim().split('\n')[0];
-        if (videoUrl) {
-            ctx.replyWithVideo({ url: videoUrl }).catch(async () => {
-                ctx.reply('🔗 الرابط المباشر (يمكنك تحميله من هنا):\n' + videoUrl);
-            });
+        if (response.data && response.data.url) {
+            await ctx.replyWithVideo({ url: response.data.url });
         } else {
-            ctx.reply('❌ تعذر الحصول على رابط صالح.');
+            ctx.reply('❌ تعذر استخراج الرابط من يوتيوب. قد يكون الفيديو محظوراً أو خاصاً.');
         }
-    });
+    } catch (error) {
+        // إذا فشل Cobalt، سنعطيك رابطاً يدوياً للتحميل
+        ctx.reply('❌ يوتيوب يتطلب صلاحيات خاصة حالياً. يمكنك التحميل يدوياً من الرابط: ' + url);
+    }
 });
 
 const PORT = process.env.PORT || 3000;
