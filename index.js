@@ -35,13 +35,12 @@ bot.command('testcookies', async (ctx) => {
     }
 });
 
-// استخراج video ID من أي رابط YouTube
 function extractYouTubeId(url) {
     const patterns = [
-        /(?:v=)([^&\n?#]+)/,           // youtube.com/watch?v=ID
-        /youtu\.be\/([^&\n?#]+)/,       // youtu.be/ID
-        /\/shorts\/([^&\n?#]+)/,        // youtube.com/shorts/ID
-        /\/embed\/([^&\n?#]+)/,         // youtube.com/embed/ID
+        /(?:v=)([^&\n?#]+)/,
+        /youtu\.be\/([^&\n?#]+)/,
+        /\/shorts\/([^&\n?#]+)/,
+        /\/embed\/([^&\n?#]+)/,
     ];
     for (const pattern of patterns) {
         const match = url.match(pattern);
@@ -57,37 +56,38 @@ async function downloadYouTube(ctx, url) {
         return;
     }
 
-    const instances = [
-        'https://invidious.kavin.rocks',
-        'https://invidious.lunar.icu',
-        'https://invidious.privacydev.net',
-        'https://inv.nadeko.net',
-        'https://invidious.nerdvpn.de'
+    const pipedInstances = [
+        'https://pipedapi.kavin.rocks',
+        'https://pipedapi.tokhmi.xyz',
+        'https://pipedapi.moomoo.me',
+        'https://pipedapi.in.projectsegfau.lt',
+        'https://piped-api.garudalinux.org',
     ];
 
     let videoUrl = null;
 
-    for (const instance of instances) {
+    for (const instance of pipedInstances) {
         try {
-            const res = await axios.get(`${instance}/api/v1/videos/${videoId}`, {
+            const res = await axios.get(`${instance}/streams/${videoId}`, {
                 timeout: 8000
             });
 
-            const formats = res.data?.formatStreams || [];
+            const streams = res.data?.videoStreams || [];
 
             const fmt =
-                formats.find(f => f.qualityLabel === '720p') ||
-                formats.find(f => f.qualityLabel === '480p') ||
-                formats.find(f => f.qualityLabel === '360p') ||
-                formats[0];
+                streams.find(s => s.quality === '720p' && s.videoOnly === false) ||
+                streams.find(s => s.quality === '480p' && s.videoOnly === false) ||
+                streams.find(s => s.quality === '360p' && s.videoOnly === false) ||
+                streams.find(s => s.videoOnly === false) ||
+                streams[0];
 
             if (fmt?.url) {
                 videoUrl = fmt.url;
-                console.log('Found video via:', instance);
+                console.log('Found video via Piped:', instance);
                 break;
             }
         } catch (e) {
-            console.log('Instance failed:', instance, e.message);
+            console.log('Piped instance failed:', instance, e.message);
             continue;
         }
     }
