@@ -46,6 +46,7 @@ async function downloadWithCobalt(url) {
             {
                 url: url,
                 videoQuality: "720",
+                youtubeVideoCodec: "h264",
                 filenameStyle: "basic"
             },
             {
@@ -59,11 +60,28 @@ async function downloadWithCobalt(url) {
 
         console.log('Cobalt response:', JSON.stringify(response.data));
 
-        if (response.data?.url) return response.data.url;
-        if (response.data?.tunnel) return response.data.tunnel;
+        const data = response.data;
+
+        // status ممكن يكون tunnel أو redirect
+        if (data?.status === 'tunnel' || data?.status === 'redirect') {
+            return data.url;
+        }
+
+        // local-processing بيرجع array من الـ tunnels
+        if (data?.status === 'local-processing' && data?.tunnel?.length > 0) {
+            return data.tunnel[0];
+        }
+
+        // picker بيرجع array من الـ items
+        if (data?.status === 'picker' && data?.picker?.length > 0) {
+            return data.picker[0].url;
+        }
 
     } catch (e) {
         console.log('Cobalt failed:', e.message);
+        if (e.response) {
+            console.log('Cobalt error response:', JSON.stringify(e.response.data));
+        }
     }
     return null;
 }
