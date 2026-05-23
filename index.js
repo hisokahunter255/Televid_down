@@ -40,8 +40,14 @@ async function downloadYouTube(ctx, url) {
     const filepath = path.join('/tmp', filename);
 
     return new Promise((resolve, reject) => {
-        const cookiesPath = '/etc/secrets/cookies.txt';
-        const cookiesFlag = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
+        const cookiesSource = '/etc/secrets/cookies.txt';
+        const cookiesCopy = '/tmp/cookies.txt';
+
+        if (fs.existsSync(cookiesSource) && !fs.existsSync(cookiesCopy)) {
+            fs.copyFileSync(cookiesSource, cookiesCopy);
+        }
+
+        const cookiesFlag = fs.existsSync(cookiesCopy) ? `--cookies "${cookiesCopy}"` : '';
 
         const cmd = `yt-dlp ${cookiesFlag} -f "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best" --merge-output-format mp4 -o "${filepath}" "${url}"`;
 
