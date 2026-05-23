@@ -1,7 +1,6 @@
 const { Telegraf } = require('telegraf');
 const { exec } = require('child_process');
 const express = require('express');
-const fs = require('fs');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
@@ -12,27 +11,24 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text.trim();
     if (!url.startsWith('http')) return;
 
-    ctx.reply('⏳ جارٍ المعالجة... (هذا قد يستغرق لحظات)');
+    ctx.reply('⏳ جاري التحميل...');
 
-    // تحميل yt-dlp محلياً في كل مرة لضمان التوافق
-    const downloadCmd = `python3 -m pip install -U yt-dlp && python3 -m yt_dlp -g --format "best[ext=mp4][height<=720]" "${url}"`;
-
-    exec(downloadCmd, (error, stdout, stderr) => {
+    // نشغل الأداة مباشرة من النظام
+    exec(`yt-dlp -g "${url}"`, (error, stdout, stderr) => {
         if (error) {
-            ctx.reply('❌ تعذر التحميل: الرابط لا يدعم التحميل المباشر.');
+            ctx.reply('❌ تعذر التحميل. جرب رابطاً آخر.');
             return;
         }
-
-        const videoUrl = stdout.trim().split('\n')[0];
-        if (videoUrl) {
-            ctx.replyWithVideo({ url: videoUrl }).catch(() => {
-                ctx.reply('🔗 الرابط المباشر:\n' + videoUrl);
+        const link = stdout.trim().split('\n')[0];
+        if (link) {
+            ctx.replyWithVideo({ url: link }).catch(() => {
+                ctx.reply('🔗 إليك الرابط المباشر:\n' + link);
             });
         } else {
-            ctx.reply('❌ لم يتم العثور على رابط صالح.');
+            ctx.reply('❌ لم يتم العثور على رابط.');
         }
     });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('Bot running...'));
+app.listen(PORT, () => console.log('Bot is running...'));
