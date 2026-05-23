@@ -25,16 +25,6 @@ bot.command('test', async (ctx) => {
     });
 });
 
-bot.command('testcookies', async (ctx) => {
-    const cookiesPath = '/etc/secrets/cookies.txt';
-    if (fs.existsSync(cookiesPath)) {
-        const content = fs.readFileSync(cookiesPath, 'utf8');
-        await ctx.reply('✅ cookies موجودة، حجمها: ' + content.length + ' حرف');
-    } else {
-        await ctx.reply('❌ cookies مش موجودة في ' + cookiesPath);
-    }
-});
-
 function extractYouTubeId(url) {
     const patterns = [
         /(?:v=)([^&\n?#]+)/,
@@ -49,57 +39,34 @@ function extractYouTubeId(url) {
     return null;
 }
 
-async function downloadYouTube(ctx, url) {
-    const videoId = extractYouTubeId(url);
-    if (!videoId) {
-        await ctx.reply('❌ رابط YouTube غير صحيح.');
-        return;
-    }
-
-    const pipedInstances = [
-        'https://pipedapi.kavin.rocks',
-        'https://pipedapi.tokhmi.xyz',
-        'https://pipedapi.moomoo.me',
-        'https://pipedapi.in.projectsegfau.lt',
-        'https://piped-api.garudalinux.org',
+async function downloadWithCobalt(url) {
+    const cobaltInstances = [
+        'https://cobalt.tools',
+        'https://co.wuk.sh',
+        'https://cobalt.flare.pw',
     ];
 
-    let videoUrl = null;
-
-    for (const instance of pipedInstances) {
+    for (const instance of cobaltInstances) {
         try {
-            const res = await axios.get(`${instance}/streams/${videoId}`, {
-                timeout: 8000
-            });
-
-            const streams = res.data?.videoStreams || [];
-
-            const fmt =
-                streams.find(s => s.quality === '720p' && s.videoOnly === false) ||
-                streams.find(s => s.quality === '480p' && s.videoOnly === false) ||
-                streams.find(s => s.quality === '360p' && s.videoOnly === false) ||
-                streams.find(s => s.videoOnly === false) ||
-                streams[0];
-
-            if (fmt?.url) {
-                videoUrl = fmt.url;
-                console.log('Found video via Piped:', instance);
-                break;
+            const response = await axios.post(`${instance}/api/json`,
+                { url, vQuality: "720" },
+                {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 10000
+                }
+            );
+            if (response.data?.url) {
+                return response.data.url;
             }
         } catch (e) {
-            console.log('Piped instance failed:', instance, e.message);
+            console.log('Cobalt instance failed:', instance, e.message);
             continue;
         }
     }
-
-    if (!videoUrl) {
-        await ctx.reply('❌ لم يتم العثور على رابط للفيديو.');
-        return;
-    }
-
-    await ctx.replyWithVideo({ url: videoUrl }).catch(async () => {
-        await ctx.reply('🔗 رابط الفيديو المباشر:\n' + videoUrl);
-    });
+    return null;
 }
 
 async function downloadAndSend(ctx, url) {
@@ -152,33 +119,36 @@ bot.on('text', async (ctx) => {
     const isTikTok = url.includes('tiktok.com');
 
     try {
-        if (isYouTube) {
-            await downloadYouTube(ctx, url);
-
-        } else if (isTikTok) {
-            try {
-                const tik = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
-                if (tik.data?.data?.play) {
-                    await ctx.replyWithVideo({ url: tik.data.data.play });
-                } else {
-                    throw new Error('No URL from TikWM');
-                }
-            } catch {
-                await downloadAndSend(ctx, url);
+        if (isYouTube || isTikTok) {
+            // جرب Cobalt الأول لليوتيوب والتيكتوك
+            const cobaltUrl = await downloadWithCobalt(url);
+            if (cobaltUrl) {
+                await ctx.replyWithVideo({ url: cobaltUrl }).catch(async () => {
+                    await ctx.reply('🔗 رابط الفيديو المباشر:\n' + cobaltUrl);
+                });
+                return;
             }
 
+            // fallback للتيكتوك
+            if (isTikTok) {
+                try {
+                    const tik = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+                    if (tik.data?.data?.play) {
+                        await ctx.replyWithVideo({ url: tik.data.data.play });
+                        return;
+                    }
+                } catch {}
+            }
+
+            await ctx.reply('❌ تعذر التحميل. الرابط غير مدعوم أو خاص.');
+
         } else {
-            try {
-                const response = await axios.post('https://cobalt.tools/api/json',
-                    { url, vQuality: "720" },
-                    { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' } }
-                );
-                if (response.data?.url) {
-                    await ctx.replyWithVideo({ url: response.data.url });
-                } else {
-                    throw new Error('No URL from Cobalt');
-                }
-            } catch {
+            const cobaltUrl = await downloadWithCobalt(url);
+            if (cobaltUrl) {
+                await ctx.replyWithVideo({ url: cobaltUrl }).catch(async () => {
+                    await ctx.reply('🔗 رابط الفيديو المباشر:\n' + cobaltUrl);
+                });
+            } else {
                 await downloadAndSend(ctx, url);
             }
         }
