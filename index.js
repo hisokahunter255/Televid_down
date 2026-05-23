@@ -40,39 +40,30 @@ function extractYouTubeId(url) {
 }
 
 async function downloadWithCobalt(url) {
-    // Cobalt API الجديدة
-    const instances = [
-        'https://cobalt.tools',
-        'https://cobalt.cocoa.coffee',
-        'https://cobalt.synzr.space',
-    ];
-
-    for (const instance of instances) {
-        try {
-            const response = await axios.post(`${instance}/api/json`,
-                {
-                    url: url,
-                    videoQuality: "720",
-                    filenameStyle: "basic"
+    try {
+        const response = await axios.post(
+            'https://cobalt-api-production-e8b6.up.railway.app/',
+            {
+                url: url,
+                videoQuality: "720",
+                filenameStyle: "basic"
+            },
+            {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
                 },
-                {
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    },
-                    timeout: 15000
-                }
-            );
+                timeout: 30000
+            }
+        );
 
-            console.log('Cobalt response:', JSON.stringify(response.data));
+        console.log('Cobalt response:', JSON.stringify(response.data));
 
-            if (response.data?.url) return response.data.url;
-            if (response.data?.tunnel) return response.data.tunnel;
+        if (response.data?.url) return response.data.url;
+        if (response.data?.tunnel) return response.data.tunnel;
 
-        } catch (e) {
-            console.log('Cobalt failed:', instance, e.message);
-            continue;
-        }
+    } catch (e) {
+        console.log('Cobalt failed:', e.message);
     }
     return null;
 }
@@ -127,7 +118,6 @@ bot.on('text', async (ctx) => {
     const isTikTok = url.includes('tiktok.com');
 
     try {
-        // جرب Cobalt الأول لكل المواقع
         const cobaltUrl = await downloadWithCobalt(url);
         if (cobaltUrl) {
             await ctx.replyWithVideo({ url: cobaltUrl }).catch(async () => {
@@ -136,7 +126,6 @@ bot.on('text', async (ctx) => {
             return;
         }
 
-        // fallback للتيكتوك
         if (isTikTok) {
             try {
                 const tik = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
@@ -147,7 +136,6 @@ bot.on('text', async (ctx) => {
             } catch {}
         }
 
-        // fallback لباقي المواقع بـ yt-dlp
         if (!isYouTube) {
             await downloadAndSend(ctx, url);
         } else {
