@@ -25,15 +25,19 @@ bot.command('test', async (ctx) => {
     });
 });
 
-async function downloadAndSend(ctx, url) {
+async function downloadYouTube(ctx, url) {
     const filename = `video_${Date.now()}.mp4`;
     const filepath = path.join('/tmp', filename);
 
     return new Promise((resolve, reject) => {
-        const cmd = `yt-dlp -f "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best" --merge-output-format mp4 -o "${filepath}" "${url}"`;
+        const cookiesPath = '/etc/secrets/cookies.txt';
+        const cookiesFlag = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
+
+        const cmd = `yt-dlp ${cookiesFlag} -f "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best" --merge-output-format mp4 -o "${filepath}" "${url}"`;
 
         exec(cmd, async (error, stdout, stderr) => {
             if (error) {
+                console.error('yt-dlp YouTube error:', stderr);
                 reject(error);
                 return;
             }
@@ -43,7 +47,7 @@ async function downloadAndSend(ctx, url) {
                 const fileSizeMB = stats.size / (1024 * 1024);
 
                 if (fileSizeMB > 50) {
-                    exec(`yt-dlp -g "${url}"`, async (err, out) => {
+                    exec(`yt-dlp ${cookiesFlag} -g "${url}"`, async (err, out) => {
                         fs.unlinkSync(filepath);
                         if (err) {
                             await ctx.reply('❌ الفيديو كبير جداً ولا يمكن إرساله.');
@@ -65,16 +69,15 @@ async function downloadAndSend(ctx, url) {
     });
 }
 
-async function downloadYouTube(ctx, url) {
+async function downloadAndSend(ctx, url) {
     const filename = `video_${Date.now()}.mp4`;
     const filepath = path.join('/tmp', filename);
 
     return new Promise((resolve, reject) => {
-        const cmd = `yt-dlp --extractor-args "youtube:player_client=web,mweb" --no-check-certificates -f "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best" --merge-output-format mp4 -o "${filepath}" "${url}"`;
+        const cmd = `yt-dlp -f "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best" --merge-output-format mp4 -o "${filepath}" "${url}"`;
 
         exec(cmd, async (error, stdout, stderr) => {
             if (error) {
-                console.error('yt-dlp YouTube error:', stderr);
                 reject(error);
                 return;
             }
