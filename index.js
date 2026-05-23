@@ -1,73 +1,172 @@
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
 const express = require('express');
+const { exec } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
 
+app.use(express.json());
 app.use(bot.webhookCallback('/webhook'));
 
-// وظيفة لجلب الفيديو من فيسبوك باستخدام وسيط قوي
-async function getFacebookVideo(url) {
-    // نستخدم خدمة FBDOWN (الأكثر توافقاً مع ريندر حالياً)
-    const response = await axios.post('https://fdown.net/api/fetch-video', 
-        `url=${encodeURIComponent(url)}`,
-        {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-            }
+if (process.env.WEBHOOK_URL) {
+    bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/webhook`);
+}
+
+bot.command('test', async (ctx) => {
+    exec('yt-dlp --version', async (error, stdout, stderr) => {
+        if (error) {
+            await ctx.reply('❌ yt-dlp غير مثبت:\n' + stderr);
+        } else {
+            await ctx.reply('✅ yt-dlp مثبت: ' + stdout.trim());
         }
-    );
-    // استخراج الرابط من الرد (ملاحظة: تحتاج ضبط حسب بنية الرد)
-    // إذا لم ينجح، سنعود لـ Cobalt كخيار أخير
-    return response.data?.url || null;
+    });
+});
+
+function extractYouTubeId(url) {
+    const patterns = [
+        /(?:v=)([^&\n?#]+)/,
+        /youtu\.be\/([^&\n?#]+)/,
+        /\/shorts\/([^&\n?#]+)/,
+        /\/embed\/([^&\n?#]+)/,
+    ];
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match) return match[1];
+    }
+    return null;
+}
+
+async function downloadWithCobalt(url) {
+    try {
+        const response = await axios.post(
+            'https://cobalt-api-production-e8b6.up.railway.app/',
+            {
+                url: url,
+                videoQuality: "720",
+                youtubeVideoCodec: "h264",
+                filenameStyle: "basic"
+            },
+            {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                timeout: 30000
+            }
+        );
+
+        console.log('Cobalt response:', JSON.stringify(response.data));
+
+        const data = response.data;
+
+        // status ممكن يكون tunnel أو redirect
+        if (data?.status === 'tunnel' || data?.status === 'redirect') {
+            return data.url;
+        }
+
+        // local-processing بيرجع array من الـ tunnels
+        if (data?.status === 'local-processing' && data?.tunnel?.length > 0) {
+            return data.tunnel[0];
+        }
+
+        // picker بيرجع array من الـ items
+        if (data?.status === 'picker' && data?.picker?.length > 0) {
+            return data.picker[0].url;
+        }
+
+    } catch (e) {
+        console.log('Cobalt failed:', e.message);
+        if (e.response) {
+            console.log('Cobalt error response:', JSON.stringify(e.response.data));
+        }
+    }
+    return null;
+}
+
+async function downloadAndSend(ctx, url) {
+    const filename = `video_${Date.now()}.mp4`;
+    const filepath = path.join('/tmp', filename);
+
+    return new Promise((resolve, reject) => {
+        const cmd = `yt-dlp -f "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best" --merge-output-format mp4 -o "${filepath}" "${url}"`;
+
+        exec(cmd, async (error, stdout, stderr) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+
+            try {
+                const stats = fs.statSync(filepath);
+                const fileSizeMB = stats.size / (1024 * 1024);
+
+                if (fileSizeMB > 50) {
+                    exec(`yt-dlp -g "${url}"`, async (err, out) => {
+                        fs.unlinkSync(filepath);
+                        if (err) {
+                            await ctx.reply('❌ الفيديو كبير جداً ولا يمكن إرساله.');
+                        } else {
+                            await ctx.reply('⚠️ الفيديو أكبر من 50MB، إليك الرابط المباشر:\n' + out.trim().split('\n')[0]);
+                        }
+                        resolve();
+                    });
+                } else {
+                    await ctx.replyWithVideo({ source: filepath });
+                    fs.unlinkSync(filepath);
+                    resolve();
+                }
+            } catch (e) {
+                if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+                reject(e);
+            }
+        });
+    });
 }
 
 bot.on('text', async (ctx) => {
     const url = ctx.message.text.trim();
     if (!url.startsWith('http')) return;
 
-    ctx.reply('⏳ جاري المعالجة الفائقة...');
+    await ctx.reply('⏳ جارٍ المعالجة...');
+
+    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+    const isTikTok = url.includes('tiktok.com');
 
     try {
-        // 1. تيك توك (TikWM - لا يزال يعمل بامتياز)
-        if (url.includes('tiktok.com')) {
-            const res = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
-            if (res.data?.data?.play) {
-                await ctx.replyWithVideo({ url: res.data.data.play });
-                return;
-            }
-        }
-
-        // 2. فيسبوك وانستجرام (المحاولة الأخيرة باستخدام Cobalt مع إعدادات متقدمة)
-        if (url.includes('facebook.com') || url.includes('fb.watch') || url.includes('instagram.com')) {
-            const res = await axios.post('https://api.cobalt.tools/api/json', {
-                url: url,
-                vQuality: "720",
-                dubLang: true,
-                disableMetadata: true
-            }, {
-                headers: { 
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-                    'Referer': 'https://www.facebook.com/'
-                }
+        const cobaltUrl = await downloadWithCobalt(url);
+        if (cobaltUrl) {
+            await ctx.replyWithVideo({ url: cobaltUrl }).catch(async () => {
+                await ctx.reply('🔗 رابط الفيديو المباشر:\n' + cobaltUrl);
             });
-
-            if (res.data?.url) {
-                await ctx.replyWithVideo({ url: res.data.url });
-                return;
-            }
+            return;
         }
 
-        ctx.reply('❌ للأسف، السيرفر لا يزال محظوراً من فيسبوك. الرابط قد لا يكون عاماً.');
+        if (isTikTok) {
+            try {
+                const tik = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+                if (tik.data?.data?.play) {
+                    await ctx.replyWithVideo({ url: tik.data.data.play });
+                    return;
+                }
+            } catch {}
+        }
+
+        if (!isYouTube) {
+            await downloadAndSend(ctx, url);
+        } else {
+            await ctx.reply('❌ تعذر تحميل الفيديو من YouTube حالياً.');
+        }
+
     } catch (error) {
-        console.error("Critical Error:", error.message);
-        ctx.reply('❌ فشل الاتصال: حاول لاحقاً أو استخدم رابطاً آخر.');
+        console.error(error);
+        await ctx.reply('❌ تعذر التحميل. الرابط غير مدعوم أو خاص.');
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('Bot is running...'));
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
