@@ -25,6 +25,16 @@ bot.command('test', async (ctx) => {
     });
 });
 
+bot.command('testcookies', async (ctx) => {
+    const cookiesPath = '/etc/secrets/cookies.txt';
+    if (fs.existsSync(cookiesPath)) {
+        const content = fs.readFileSync(cookiesPath, 'utf8');
+        await ctx.reply('✅ cookies موجودة، حجمها: ' + content.length + ' حرف');
+    } else {
+        await ctx.reply('❌ cookies مش موجودة في ' + cookiesPath);
+    }
+});
+
 async function downloadYouTube(ctx, url) {
     const filename = `video_${Date.now()}.mp4`;
     const filepath = path.join('/tmp', filename);
