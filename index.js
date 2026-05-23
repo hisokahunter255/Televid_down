@@ -25,20 +25,6 @@ bot.command('test', async (ctx) => {
     });
 });
 
-function extractYouTubeId(url) {
-    const patterns = [
-        /(?:v=)([^&\n?#]+)/,
-        /youtu\.be\/([^&\n?#]+)/,
-        /\/shorts\/([^&\n?#]+)/,
-        /\/embed\/([^&\n?#]+)/,
-    ];
-    for (const pattern of patterns) {
-        const match = url.match(pattern);
-        if (match) return match[1];
-    }
-    return null;
-}
-
 async function downloadWithCobalt(url) {
     try {
         const response = await axios.post(
@@ -58,12 +44,23 @@ async function downloadWithCobalt(url) {
         );
 
         console.log('Cobalt response:', JSON.stringify(response.data));
+        const data = response.data;
 
-        if (response.data?.url) return response.data.url;
-        if (response.data?.tunnel) return response.data.tunnel;
+        if (data?.status === 'tunnel' || data?.status === 'redirect') {
+            return data.url;
+        }
+        if (data?.status === 'local-processing' && data?.tunnel?.length > 0) {
+            return data.tunnel[0];
+        }
+        if (data?.status === 'picker' && data?.picker?.length > 0) {
+            return data.picker[0].url;
+        }
 
     } catch (e) {
         console.log('Cobalt failed:', e.message);
+        if (e.response) {
+            console.log('Cobalt error response:', JSON.stringify(e.response.data));
+        }
     }
     return null;
 }
@@ -112,20 +109,28 @@ bot.on('text', async (ctx) => {
     const url = ctx.message.text.trim();
     if (!url.startsWith('http')) return;
 
-    await ctx.reply('⏳ جارٍ المعالجة...');
-
     const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
     const isTikTok = url.includes('tiktok.com');
+    const isFacebook = url.includes('facebook.com') || url.includes('fb.watch');
+    const isInstagram = url.includes('instagram.com');
+    const isTwitter = url.includes('twitter.com') || url.includes('x.com');
+
+    // رفض YouTube
+    if (isYouTube) {
+        await ctx.reply('⚠️ YouTube غير مدعوم حالياً.\n\nالمواقع المدعومة:\n• TikTok\n• Facebook\n• Instagram\n• X (Twitter)');
+        return;
+    }
+
+    // رفض المواقع غير المدعومة
+    if (!isTikTok && !isFacebook && !isInstagram && !isTwitter) {
+        await ctx.reply('⚠️ الموقع غير مدعوم.\n\nالمواقع المدعومة:\n• TikTok\n• Facebook\n• Instagram\n• X (Twitter)');
+        return;
+    }
+
+    await ctx.reply('⏳ جارٍ المعالجة...');
 
     try {
-        const cobaltUrl = await downloadWithCobalt(url);
-        if (cobaltUrl) {
-            await ctx.replyWithVideo({ url: cobaltUrl }).catch(async () => {
-                await ctx.reply('🔗 رابط الفيديو المباشر:\n' + cobaltUrl);
-            });
-            return;
-        }
-
+        // TikTok: جرب TikWM الأول لأنه أسرع
         if (isTikTok) {
             try {
                 const tik = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
@@ -136,11 +141,17 @@ bot.on('text', async (ctx) => {
             } catch {}
         }
 
-        if (!isYouTube) {
-            await downloadAndSend(ctx, url);
-        } else {
-            await ctx.reply('❌ تعذر تحميل الفيديو من YouTube حالياً.');
+        // جرب Cobalt لكل المواقع
+        const cobaltUrl = await downloadWithCobalt(url);
+        if (cobaltUrl) {
+            await ctx.replyWithVideo({ url: cobaltUrl }).catch(async () => {
+                await ctx.reply('🔗 رابط الفيديو المباشر:\n' + cobaltUrl);
+            });
+            return;
         }
+
+        // fallback لـ yt-dlp
+        await downloadAndSend(ctx, url);
 
     } catch (error) {
         console.error(error);
