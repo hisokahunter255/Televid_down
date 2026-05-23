@@ -40,29 +40,37 @@ function extractYouTubeId(url) {
 }
 
 async function downloadWithCobalt(url) {
-    const cobaltInstances = [
+    // Cobalt API الجديدة
+    const instances = [
         'https://cobalt.tools',
-        'https://co.wuk.sh',
-        'https://cobalt.flare.pw',
+        'https://cobalt.cocoa.coffee',
+        'https://cobalt.synzr.space',
     ];
 
-    for (const instance of cobaltInstances) {
+    for (const instance of instances) {
         try {
             const response = await axios.post(`${instance}/api/json`,
-                { url, vQuality: "720" },
+                {
+                    url: url,
+                    videoQuality: "720",
+                    filenameStyle: "basic"
+                },
                 {
                     headers: {
                         'Accept': 'application/json',
                         'Content-Type': 'application/json'
                     },
-                    timeout: 10000
+                    timeout: 15000
                 }
             );
-            if (response.data?.url) {
-                return response.data.url;
-            }
+
+            console.log('Cobalt response:', JSON.stringify(response.data));
+
+            if (response.data?.url) return response.data.url;
+            if (response.data?.tunnel) return response.data.tunnel;
+
         } catch (e) {
-            console.log('Cobalt instance failed:', instance, e.message);
+            console.log('Cobalt failed:', instance, e.message);
             continue;
         }
     }
@@ -119,38 +127,31 @@ bot.on('text', async (ctx) => {
     const isTikTok = url.includes('tiktok.com');
 
     try {
-        if (isYouTube || isTikTok) {
-            // جرب Cobalt الأول لليوتيوب والتيكتوك
-            const cobaltUrl = await downloadWithCobalt(url);
-            if (cobaltUrl) {
-                await ctx.replyWithVideo({ url: cobaltUrl }).catch(async () => {
-                    await ctx.reply('🔗 رابط الفيديو المباشر:\n' + cobaltUrl);
-                });
-                return;
-            }
+        // جرب Cobalt الأول لكل المواقع
+        const cobaltUrl = await downloadWithCobalt(url);
+        if (cobaltUrl) {
+            await ctx.replyWithVideo({ url: cobaltUrl }).catch(async () => {
+                await ctx.reply('🔗 رابط الفيديو المباشر:\n' + cobaltUrl);
+            });
+            return;
+        }
 
-            // fallback للتيكتوك
-            if (isTikTok) {
-                try {
-                    const tik = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
-                    if (tik.data?.data?.play) {
-                        await ctx.replyWithVideo({ url: tik.data.data.play });
-                        return;
-                    }
-                } catch {}
-            }
+        // fallback للتيكتوك
+        if (isTikTok) {
+            try {
+                const tik = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+                if (tik.data?.data?.play) {
+                    await ctx.replyWithVideo({ url: tik.data.data.play });
+                    return;
+                }
+            } catch {}
+        }
 
-            await ctx.reply('❌ تعذر التحميل. الرابط غير مدعوم أو خاص.');
-
+        // fallback لباقي المواقع بـ yt-dlp
+        if (!isYouTube) {
+            await downloadAndSend(ctx, url);
         } else {
-            const cobaltUrl = await downloadWithCobalt(url);
-            if (cobaltUrl) {
-                await ctx.replyWithVideo({ url: cobaltUrl }).catch(async () => {
-                    await ctx.reply('🔗 رابط الفيديو المباشر:\n' + cobaltUrl);
-                });
-            } else {
-                await downloadAndSend(ctx, url);
-            }
+            await ctx.reply('❌ تعذر تحميل الفيديو من YouTube حالياً.');
         }
 
     } catch (error) {
