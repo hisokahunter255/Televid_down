@@ -1,169 +1,37 @@
 const { Telegraf } = require('telegraf');
-const axios = require('axios');
-const express = require('express');
 const { exec } = require('child_process');
+const express = require('express');
 const fs = require('fs');
-const path = require('path');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
 
-app.use(express.json());
 app.use(bot.webhookCallback('/webhook'));
-
-if (process.env.WEBHOOK_URL) {
-    bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/webhook`);
-}
-
-bot.command('test', async (ctx) => {
-    exec('yt-dlp --version', async (error, stdout, stderr) => {
-        if (error) {
-            await ctx.reply('❌ yt-dlp غير مثبت:\n' + stderr);
-        } else {
-            await ctx.reply('✅ yt-dlp مثبت: ' + stdout.trim());
-        }
-    });
-});
-
-function extractYouTubeId(url) {
-    const patterns = [
-        /(?:v=)([^&\n?#]+)/,
-        /youtu\.be\/([^&\n?#]+)/,
-        /\/shorts\/([^&\n?#]+)/,
-        /\/embed\/([^&\n?#]+)/,
-    ];
-    for (const pattern of patterns) {
-        const match = url.match(pattern);
-        if (match) return match[1];
-    }
-    return null;
-}
-
-async function downloadWithCobalt(url) {
-    try {
-        const response = await axios.post(
-            'https://cobalt-api-production-e8b6.up.railway.app/',
-            {
-                url: url,
-                videoQuality: "720",
-                youtubeVideoCodec: "h264",
-                filenameStyle: "basic"
-            },
-            {
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                timeout: 30000
-            }
-        );
-
-        console.log('Cobalt response:', JSON.stringify(response.data));
-
-        const data = response.data;
-
-        // status ممكن يكون tunnel أو redirect
-        if (data?.status === 'tunnel' || data?.status === 'redirect') {
-            return data.url;
-        }
-
-        // local-processing بيرجع array من الـ tunnels
-        if (data?.status === 'local-processing' && data?.tunnel?.length > 0) {
-            return data.tunnel[0];
-        }
-
-        // picker بيرجع array من الـ items
-        if (data?.status === 'picker' && data?.picker?.length > 0) {
-            return data.picker[0].url;
-        }
-
-    } catch (e) {
-        console.log('Cobalt failed:', e.message);
-        if (e.response) {
-            console.log('Cobalt error response:', JSON.stringify(e.response.data));
-        }
-    }
-    return null;
-}
-
-async function downloadAndSend(ctx, url) {
-    const filename = `video_${Date.now()}.mp4`;
-    const filepath = path.join('/tmp', filename);
-
-    return new Promise((resolve, reject) => {
-        const cmd = `yt-dlp -f "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best" --merge-output-format mp4 -o "${filepath}" "${url}"`;
-
-        exec(cmd, async (error, stdout, stderr) => {
-            if (error) {
-                reject(error);
-                return;
-            }
-
-            try {
-                const stats = fs.statSync(filepath);
-                const fileSizeMB = stats.size / (1024 * 1024);
-
-                if (fileSizeMB > 50) {
-                    exec(`yt-dlp -g "${url}"`, async (err, out) => {
-                        fs.unlinkSync(filepath);
-                        if (err) {
-                            await ctx.reply('❌ الفيديو كبير جداً ولا يمكن إرساله.');
-                        } else {
-                            await ctx.reply('⚠️ الفيديو أكبر من 50MB، إليك الرابط المباشر:\n' + out.trim().split('\n')[0]);
-                        }
-                        resolve();
-                    });
-                } else {
-                    await ctx.replyWithVideo({ source: filepath });
-                    fs.unlinkSync(filepath);
-                    resolve();
-                }
-            } catch (e) {
-                if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
-                reject(e);
-            }
-        });
-    });
-}
 
 bot.on('text', async (ctx) => {
     const url = ctx.message.text.trim();
     if (!url.startsWith('http')) return;
 
-    await ctx.reply('⏳ جارٍ المعالجة...');
+    ctx.reply('⏳ جارٍ المعالجة بواسطة المحرك الداخلي...');
 
-    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-    const isTikTok = url.includes('tiktok.com');
-
-    try {
-        const cobaltUrl = await downloadWithCobalt(url);
-        if (cobaltUrl) {
-            await ctx.replyWithVideo({ url: cobaltUrl }).catch(async () => {
-                await ctx.reply('🔗 رابط الفيديو المباشر:\n' + cobaltUrl);
-            });
+    // استخدام yt-dlp لاستخراج رابط مباشر بدلاً من تحميل الفيديو بالكامل
+    // استخدام --get-url هو الأسرع والأكثر استقراراً
+    exec(`yt-dlp --get-url --format "best[ext=mp4][height<=720]" "${url}"`, (error, stdout, stderr) => {
+        if (error) {
+            ctx.reply('❌ فشل الاستخراج، قد يكون الفيديو مقيداً أو خاصاً.');
+            console.error("yt-dlp error:", stderr);
             return;
         }
 
-        if (isTikTok) {
-            try {
-                const tik = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
-                if (tik.data?.data?.play) {
-                    await ctx.replyWithVideo({ url: tik.data.data.play });
-                    return;
-                }
-            } catch {}
-        }
-
-        if (!isYouTube) {
-            await downloadAndSend(ctx, url);
+        const videoUrl = stdout.trim().split('\n')[0];
+        if (videoUrl) {
+            ctx.replyWithVideo({ url: videoUrl }).catch(async () => {
+                ctx.reply('🔗 الرابط المباشر (يمكنك تحميله من هنا):\n' + videoUrl);
+            });
         } else {
-            await ctx.reply('❌ تعذر تحميل الفيديو من YouTube حالياً.');
+            ctx.reply('❌ تعذر الحصول على رابط صالح.');
         }
-
-    } catch (error) {
-        console.error(error);
-        await ctx.reply('❌ تعذر التحميل. الرابط غير مدعوم أو خاص.');
-    }
+    });
 });
 
 const PORT = process.env.PORT || 3000;
