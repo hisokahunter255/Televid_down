@@ -35,58 +35,71 @@ bot.command('testcookies', async (ctx) => {
     }
 });
 
+// استخراج video ID من أي رابط YouTube
+function extractYouTubeId(url) {
+    const patterns = [
+        /(?:v=)([^&\n?#]+)/,           // youtube.com/watch?v=ID
+        /youtu\.be\/([^&\n?#]+)/,       // youtu.be/ID
+        /\/shorts\/([^&\n?#]+)/,        // youtube.com/shorts/ID
+        /\/embed\/([^&\n?#]+)/,         // youtube.com/embed/ID
+    ];
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match) return match[1];
+    }
+    return null;
+}
+
 async function downloadYouTube(ctx, url) {
-    const videoId = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
+    const videoId = extractYouTubeId(url);
     if (!videoId) {
         await ctx.reply('❌ رابط YouTube غير صحيح.');
         return;
     }
 
-    try {
-        const instances = [
-            'https://invidious.snopyta.org',
-            'https://vid.puffyan.us',
-            'https://invidious.kavin.rocks'
-        ];
+    const instances = [
+        'https://invidious.kavin.rocks',
+        'https://invidious.lunar.icu',
+        'https://invidious.privacydev.net',
+        'https://inv.nadeko.net',
+        'https://invidious.nerdvpn.de'
+    ];
 
-        let videoUrl = null;
+    let videoUrl = null;
 
-        for (const instance of instances) {
-            try {
-                const res = await axios.get(`${instance}/api/v1/videos/${videoId}`, {
-                    timeout: 10000
-                });
+    for (const instance of instances) {
+        try {
+            const res = await axios.get(`${instance}/api/v1/videos/${videoId}`, {
+                timeout: 8000
+            });
 
-                const formats = res.data?.formatStreams || [];
+            const formats = res.data?.formatStreams || [];
 
-                const fmt =
-                    formats.find(f => f.qualityLabel === '720p') ||
-                    formats.find(f => f.qualityLabel === '480p') ||
-                    formats.find(f => f.qualityLabel === '360p') ||
-                    formats[0];
+            const fmt =
+                formats.find(f => f.qualityLabel === '720p') ||
+                formats.find(f => f.qualityLabel === '480p') ||
+                formats.find(f => f.qualityLabel === '360p') ||
+                formats[0];
 
-                if (fmt?.url) {
-                    videoUrl = fmt.url;
-                    break;
-                }
-            } catch {
-                continue;
+            if (fmt?.url) {
+                videoUrl = fmt.url;
+                console.log('Found video via:', instance);
+                break;
             }
+        } catch (e) {
+            console.log('Instance failed:', instance, e.message);
+            continue;
         }
-
-        if (!videoUrl) {
-            await ctx.reply('❌ لم يتم العثور على رابط للفيديو.');
-            return;
-        }
-
-        await ctx.replyWithVideo({ url: videoUrl }).catch(async () => {
-            await ctx.reply('🔗 رابط الفيديو المباشر:\n' + videoUrl);
-        });
-
-    } catch (error) {
-        console.error('YouTube error:', error.message);
-        await ctx.reply('❌ تعذر تحميل الفيديو من YouTube.');
     }
+
+    if (!videoUrl) {
+        await ctx.reply('❌ لم يتم العثور على رابط للفيديو.');
+        return;
+    }
+
+    await ctx.replyWithVideo({ url: videoUrl }).catch(async () => {
+        await ctx.reply('🔗 رابط الفيديو المباشر:\n' + videoUrl);
+    });
 }
 
 async function downloadAndSend(ctx, url) {
