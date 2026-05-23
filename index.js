@@ -73,35 +73,109 @@ async function downloadYouTube(ctx, url) {
     }
 
     try {
-        const response = await axios.get('https://yt-api.p.rapidapi.com/dl', {
-            params: { id: videoId, cgeo: 'US' },
-            headers: {
-                'x-rapidapi-host': 'yt-api.p.rapidapi.com',
-                'x-rapidapi-key': process.env.RAPIDAPI_KEY
+        const response = await axios.get(
+            'https://youtube-media-downloader.p.rapidapi.com/v2/video/details',
+            {
+                params: { videoId: videoId },
+                headers: {
+                    'x-rapidapi-host': 'youtube-media-downloader.p.rapidapi.com',
+                    'x-rapidapi-key': process.env.RAPIDAPI_KEY
+                }
             }
-        });
+        );
 
-        console.log('RapidAPI response:', JSON.stringify(response.data));
+        console.log('YouTube API response:', JSON.stringify(response.data));
 
         const data = response.data;
-        let videoUrl = null;
 
-        if (data?.url) {
-            videoUrl = data.url;
-        } else if (data?.formats && data.formats.length > 0) {
-            const fmt =
-                data.formats.find(f => f.qualityLabel === '720p' && f.mimeType?.includes('video')) ||
-                data.formats.find(f => f.mimeType?.includes('video')) ||
-                data.formats[0];
-            videoUrl = fmt?.url;
-        } else if (data?.adaptiveFormats && data.adaptiveFormats.length > 0) {
-            const fmt =
-                data.adaptiveFormats.find(f => f.qualityLabel === '720p') ||
-                data.adaptiveFormats.find(f => f.mimeType?.includes('video/mp4')) ||
-                data.adaptiveFormats[0];
-            videoUrl = fmt?.url;
+        if (!data?.status) {
+            await ctx.reply('❌ تعذر الحصول على بيانات الفيديو.');
+            return;
         }
 
+        const videos = data?.videos?.items || [];
+
+        const videoFormat =
+            videos.find(v => v.quality === '720p') ||
+            videos.find(v => v.quality === '480p') ||
+            videos.find(v => v.quality === '360p') ||
+            videos[0];
+
+        if (!videoFormat?.url) {
+            console.log('No video URL in:', JSON.stringify(data));
+            await ctx.reply('❌ لم يتم العثور على رابط للفيديو.');
+            return;
+        }
+
+        const headRes = await axios.head(videoFormat.url).catch(() => null);
+        const contentLength = headRes?.headers?.['content-length'];
+        const fileSizeMB = contentLength ? parseInt(contentLength) / (1024 * 1024) : 0;
+
+        if (fileSizeMB > 50) {
+            await ctx.reply('⚠️ الفيديو أكبر من 50MB، إليك الرابط المباشر:\n' + videoFormat.url);
+        } else {
+            await ctx.replyWithVideo({ url: videoFormat.url }).catch(async () => {
+                await ctx.reply('🔗 رابط الفيديو المباشر:\n' + videoFormat.url);
+            });
+        }
+
+    } catch (error) {
+        console.error('YouTube error:', error?.response?.data || error.message);
+        await ctx.reply('❌ تعذر تحميل الفيديو من YouTube.');
+    }
+}
+
+bot.on('text', async (ctx) => {
+    const url = ctx.message.text.trim();
+    if (!url.startsWith('http')) return;
+
+    await ctx.reply('⏳ جارٍ المعالجة...');
+
+    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+    const isTikTok = url.includes('tiktok.com');
+
+    try {
+        if (isYouTube) {
+            await downloadYouTube(ctx, url);
+
+        } else if (isTikTok) {
+            try {
+                const tik = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+                if (tik.data?.data?.play) {
+                    await ctx.replyWithVideo({ url: tik.data.data.play });
+                } else {
+                    throw new Error('No URL from TikWM');
+                }
+            } catch {
+                await downloadAndSend(ctx, url);
+            }
+
+        } else {
+            try {
+                const response = await axios.post('https://cobalt.tools/api/json',
+                    { url, vQuality: "720" },
+                    { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' } }
+                );
+                if (response.data?.url) {
+                    await ctx.replyWithVideo({ url: response.data.url });
+                } else {
+                    throw new Error('No URL from Cobalt');
+                }
+            } catch {
+                await downloadAndSend(ctx, url);
+            }
+        }
+
+    } catch (error) {
+        console.error(error);
+        await ctx.reply('❌ تعذر التحميل. الرابط غير مدعوم أو خاص.');
+    }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
         if (!videoUrl) {
             console.log('No video URL found in:', JSON.stringify(data));
             await ctx.reply('❌ لم يتم العثور على رابط للفيديو.');
