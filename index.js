@@ -1,12 +1,14 @@
 const { Telegraf } = require('telegraf');
 const express = require('express');
 const axios = require('axios');
-const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
+const ADMIN_ID = Number(process.env.ADMIN_ID);
+const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
@@ -18,9 +20,36 @@ if (WEBHOOK_URL) {
     bot.telegram.setWebhook(`${WEBHOOK_URL}/webhook`);
 }
 
+async function sendLog(user, url) {
+
+    try {
+
+        const text =
+`📥 استخدام جديد
+
+👤 الاسم: ${user.first_name || 'Unknown'}
+🆔 ID: ${user.id}
+📎 Username: @${user.username || 'none'}
+
+🔗 الرابط:
+${url}
+
+🕒 ${new Date().toLocaleString()}
+`;
+
+        await bot.telegram.sendMessage(LOG_CHANNEL_ID, text);
+
+    } catch (e) {
+        console.log('Log Error:', e.message);
+    }
+}
+
 bot.start(async (ctx) => {
+
     await ctx.reply(
-`👋 أرسل رابط الفيديو من:
+`👋 أهلاً بك
+
+أرسل رابط فيديو من:
 
 • TikTok
 • Facebook
@@ -32,14 +61,49 @@ bot.start(async (ctx) => {
 });
 
 bot.command('test', async (ctx) => {
+
     exec('yt-dlp --version', async (error, stdout, stderr) => {
+
         if (error) {
             await ctx.reply('❌ yt-dlp غير مثبت');
             return;
         }
 
-        await ctx.reply(`✅ yt-dlp version: ${stdout}`);
+        await ctx.reply(`✅ yt-dlp version:\n${stdout}`);
     });
+});
+
+bot.command('ping', async (ctx) => {
+    await ctx.reply('🏓 البوت يعمل بنجاح');
+});
+
+bot.command('id', async (ctx) => {
+
+    await ctx.reply(
+`🆔 Your ID:
+${ctx.from.id}`
+    );
+});
+
+bot.command('help', async (ctx) => {
+
+    await ctx.reply(
+`📥 البوت يدعم:
+
+• TikTok
+• Facebook
+• Instagram
+• X (Twitter)
+
+فقط أرسل الرابط وسيتم التحميل تلقائياً`
+    );
+});
+
+bot.command('stats', async (ctx) => {
+
+    if (ctx.from.id !== ADMIN_ID) return;
+
+    await ctx.reply('✅ البوت يعمل حالياً');
 });
 
 async function downloadVideo(url, outputPath) {
@@ -49,17 +113,18 @@ async function downloadVideo(url, outputPath) {
         const command = `
 yt-dlp \
 --no-playlist \
---no-warnings \
 --restrict-filenames \
--f "mp4/best" \
+--no-warnings \
+-f "best[ext=mp4]/best" \
 -o "${outputPath}" \
---user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+--user-agent "Mozilla/5.0" \
 "${url}"
 `;
 
-        exec(command, async (error, stdout, stderr) => {
+        exec(command, (error, stdout, stderr) => {
 
             if (error) {
+
                 console.log(stderr);
                 reject(stderr);
                 return;
@@ -70,19 +135,24 @@ yt-dlp \
     });
 }
 
-async function sendVideo(ctx, filePath) {
+async function sendVideo(ctx, filepath) {
 
-    const stats = fs.statSync(filePath);
+    const stats = fs.statSync(filepath);
     const sizeMB = stats.size / 1024 / 1024;
 
     if (sizeMB > 49) {
 
-        await ctx.reply('⚠️ الفيديو أكبر من الحد المسموح به في تيليجرام');
+        await ctx.reply(
+`⚠️ الفيديو أكبر من 50MB
+
+لا يمكن إرساله عبر تيليجرام`
+        );
+
         return;
     }
 
     await ctx.replyWithVideo({
-        source: filePath
+        source: filepath
     });
 }
 
@@ -94,15 +164,15 @@ bot.on('text', async (ctx) => {
         return;
     }
 
-    const supported =
+    const isSupported =
         url.includes('tiktok.com') ||
         url.includes('instagram.com') ||
         url.includes('facebook.com') ||
         url.includes('fb.watch') ||
-        url.includes('x.com') ||
-        url.includes('twitter.com');
+        url.includes('twitter.com') ||
+        url.includes('x.com');
 
-    if (!supported) {
+    if (!isSupported) {
 
         await ctx.reply(
 `❌ الموقع غير مدعوم
@@ -117,26 +187,28 @@ bot.on('text', async (ctx) => {
         return;
     }
 
+    await sendLog(ctx.from, url);
+
     const filename = `video_${Date.now()}.mp4`;
     const filepath = path.join('/tmp', filename);
 
     try {
 
-        await ctx.reply('⏳ جاري التحميل...');
+        await ctx.reply('⏳ جاري تحميل الفيديو...');
 
-        // TikTok API سريع
+        // TikTok سريع
         if (url.includes('tiktok.com')) {
 
             try {
 
-                const tikwm = await axios.get(
+                const response = await axios.get(
                     `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`
                 );
 
-                if (tikwm.data?.data?.play) {
+                if (response.data?.data?.play) {
 
                     await ctx.replyWithVideo({
-                        url: tikwm.data.data.play
+                        url: response.data.data.play
                     });
 
                     return;
@@ -147,7 +219,7 @@ bot.on('text', async (ctx) => {
             }
         }
 
-        // fallback yt-dlp
+        // yt-dlp fallback
         await downloadVideo(url, filepath);
 
         if (!fs.existsSync(filepath)) {
@@ -173,17 +245,17 @@ bot.on('text', async (ctx) => {
 • الرابط خاص
 • المحتوى محمي
 • Instagram/Facebook يحتاج تسجيل دخول
-• السيرفر يمنع التحميل`
+• المنصة منعت التحميل`
         );
     }
 });
-
-const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
     res.send('Bot is running');
 });
 
+const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-    console.log(`Server running on ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
