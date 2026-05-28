@@ -20,7 +20,7 @@ if (WEBHOOK_URL) {
     bot.telegram.setWebhook(`${WEBHOOK_URL}/webhook`);
 }
 
-// ===== إرسال اللوج للقناة =====
+// ===== إرسال اللوج =====
 async function sendLog(user, url) {
 
     try {
@@ -64,7 +64,7 @@ bot.start(async (ctx) => {
     );
 });
 
-// ===== Test yt-dlp =====
+// ===== Test =====
 bot.command('test', async (ctx) => {
 
     exec('yt-dlp --version', async (error, stdout) => {
@@ -85,12 +85,6 @@ bot.command('ping', async (ctx) => {
     await ctx.reply('🏓 البوت يعمل بنجاح');
 });
 
-// ===== My ID =====
-bot.command('id', async (ctx) => {
-
-    await ctx.reply(`🆔 Your ID:\n${ctx.from.id}`);
-});
-
 // ===== Help =====
 bot.command('help', async (ctx) => {
 
@@ -101,18 +95,8 @@ bot.command('help', async (ctx) => {
 • Facebook
 • Instagram
 • X (Twitter)
-• Threads
-
-فقط أرسل الرابط وسيتم التحميل تلقائياً`
+• Threads`
     );
-});
-
-// ===== Stats =====
-bot.command('stats', async (ctx) => {
-
-    if (ctx.from.id !== ADMIN_ID) return;
-
-    await ctx.reply('✅ البوت يعمل حالياً');
 });
 
 // ===== تحميل الفيديو =====
@@ -184,11 +168,7 @@ async function sendVideo(ctx, filepath) {
 
     if (sizeMB > 49) {
 
-        await ctx.reply(
-`⚠️ الفيديو أكبر من 50MB
-
-لا يمكن إرساله عبر تيليجرام`
-        );
+        await ctx.reply('⚠️ الفيديو أكبر من 50MB');
 
         return;
     }
@@ -232,7 +212,6 @@ bot.on('text', async (ctx) => {
         return;
     }
 
-    // ===== تسجيل الاستخدام =====
     await sendLog(ctx.from, url);
 
     const filename = `video_${Date.now()}.mp4`;
@@ -242,7 +221,7 @@ bot.on('text', async (ctx) => {
 
         await ctx.reply('⏳ جاري تحميل الفيديو...');
 
-        // ===== TikTok سريع =====
+        // ===== TikTok API =====
         if (url.includes('tiktok.com')) {
 
             try {
@@ -291,8 +270,7 @@ bot.on('text', async (ctx) => {
 الأسباب المحتملة:
 • الرابط خاص
 • المحتوى محمي
-• Instagram / Threads يحتاج تسجيل دخول
-• المنصة منعت التحميل`
+• Instagram / Threads يحتاج تسجيل دخول`
         );
     }
 });
@@ -310,4 +288,3 @@ app.listen(PORT, () => {
 
     console.log(`Server running on port ${PORT}`);
 });
-```
