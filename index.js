@@ -20,6 +20,7 @@ if (WEBHOOK_URL) {
     bot.telegram.setWebhook(`${WEBHOOK_URL}/webhook`);
 }
 
+// ===== إرسال لوج للقناة =====
 async function sendLog(user, url) {
 
     try {
@@ -44,6 +45,7 @@ ${url}
     }
 }
 
+// ===== رسالة البداية =====
 bot.start(async (ctx) => {
 
     await ctx.reply(
@@ -55,14 +57,16 @@ bot.start(async (ctx) => {
 • Facebook
 • Instagram
 • X (Twitter)
+• Threads
 
 وسيتم تحميله تلقائياً`
     );
 });
 
+// ===== اختبار yt-dlp =====
 bot.command('test', async (ctx) => {
 
-    exec('yt-dlp --version', async (error, stdout, stderr) => {
+    exec('yt-dlp --version', async (error, stdout) => {
 
         if (error) {
             await ctx.reply('❌ yt-dlp غير مثبت');
@@ -73,10 +77,13 @@ bot.command('test', async (ctx) => {
     });
 });
 
+// ===== Ping =====
 bot.command('ping', async (ctx) => {
+
     await ctx.reply('🏓 البوت يعمل بنجاح');
 });
 
+// ===== ID =====
 bot.command('id', async (ctx) => {
 
     await ctx.reply(
@@ -85,6 +92,7 @@ ${ctx.from.id}`
     );
 });
 
+// ===== Help =====
 bot.command('help', async (ctx) => {
 
     await ctx.reply(
@@ -94,11 +102,13 @@ bot.command('help', async (ctx) => {
 • Facebook
 • Instagram
 • X (Twitter)
+• Threads
 
 فقط أرسل الرابط وسيتم التحميل تلقائياً`
     );
 });
 
+// ===== Admin Stats =====
 bot.command('stats', async (ctx) => {
 
     if (ctx.from.id !== ADMIN_ID) return;
@@ -106,6 +116,7 @@ bot.command('stats', async (ctx) => {
     await ctx.reply('✅ البوت يعمل حالياً');
 });
 
+// ===== تحميل الفيديو =====
 async function downloadVideo(url, outputPath) {
 
     return new Promise((resolve, reject) => {
@@ -115,8 +126,9 @@ yt-dlp \
 --no-playlist \
 --restrict-filenames \
 --no-warnings \
--f "best[ext=mp4]/best" \
+-f "bv*+ba/b" \
 -o "${outputPath}" \
+--merge-output-format mp4 \
 --user-agent "Mozilla/5.0" \
 "${url}"
 `;
@@ -135,6 +147,7 @@ yt-dlp \
     });
 }
 
+// ===== إرسال الفيديو =====
 async function sendVideo(ctx, filepath) {
 
     const stats = fs.statSync(filepath);
@@ -156,6 +169,7 @@ async function sendVideo(ctx, filepath) {
     });
 }
 
+// ===== استقبال الرسائل =====
 bot.on('text', async (ctx) => {
 
     const url = ctx.message.text.trim();
@@ -170,7 +184,8 @@ bot.on('text', async (ctx) => {
         url.includes('facebook.com') ||
         url.includes('fb.watch') ||
         url.includes('twitter.com') ||
-        url.includes('x.com');
+        url.includes('x.com') ||
+        url.includes('threads.net');
 
     if (!isSupported) {
 
@@ -181,12 +196,14 @@ bot.on('text', async (ctx) => {
 • TikTok
 • Facebook
 • Instagram
-• X`
+• X (Twitter)
+• Threads`
         );
 
         return;
     }
 
+    // ===== تسجيل الاستخدام =====
     await sendLog(ctx.from, url);
 
     const filename = `video_${Date.now()}.mp4`;
@@ -196,7 +213,7 @@ bot.on('text', async (ctx) => {
 
         await ctx.reply('⏳ جاري تحميل الفيديو...');
 
-        // TikTok سريع
+        // ===== TikTok API سريع =====
         if (url.includes('tiktok.com')) {
 
             try {
@@ -215,11 +232,12 @@ bot.on('text', async (ctx) => {
                 }
 
             } catch (e) {
+
                 console.log('TikWM failed');
             }
         }
 
-        // yt-dlp fallback
+        // ===== yt-dlp fallback =====
         await downloadVideo(url, filepath);
 
         if (!fs.existsSync(filepath)) {
@@ -250,10 +268,12 @@ bot.on('text', async (ctx) => {
     }
 });
 
+// ===== الصفحة الرئيسية =====
 app.get('/', (req, res) => {
     res.send('Bot is running');
 });
 
+// ===== تشغيل السيرفر =====
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
