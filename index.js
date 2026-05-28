@@ -1,3 +1,4 @@
+Threads
 const { Telegraf } = require('telegraf');
 const express = require('express');
 const axios = require('axios');
@@ -120,6 +121,58 @@ bot.command('stats', async (ctx) => {
 async function downloadVideo(url, outputPath) {
 
     return new Promise((resolve, reject) => {
+
+        const isThreads = url.includes('threads.net');
+        const isInstagram = url.includes('instagram.com');
+
+        let command = '';
+
+        // Threads + Instagram
+        if (isThreads || isInstagram) {
+
+            command = `
+yt-dlp \
+--no-playlist \
+--no-warnings \
+--restrict-filenames \
+--add-header "User-Agent: Mozilla/5.0" \
+--add-header "Accept-Language: en-US,en;q=0.9" \
+-f "bv*+ba/b" \
+--merge-output-format mp4 \
+-o "${outputPath}" \
+"${url}"
+`;
+        }
+
+        // باقي المواقع
+        else {
+
+            command = `
+yt-dlp \
+--no-playlist \
+--no-warnings \
+--restrict-filenames \
+-f "bv*+ba/b" \
+--merge-output-format mp4 \
+-o "${outputPath}" \
+"${url}"
+`;
+        }
+
+        exec(command, (error, stdout, stderr) => {
+
+            if (error) {
+
+                console.log('YT-DLP ERROR:\n', stderr);
+
+                reject(stderr);
+                return;
+            }
+
+            resolve();
+        });
+    });
+}
 
         const command = `
 yt-dlp \
