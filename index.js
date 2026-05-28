@@ -1,4 +1,3 @@
-Threads
 const { Telegraf } = require('telegraf');
 const express = require('express');
 const axios = require('axios');
@@ -21,7 +20,7 @@ if (WEBHOOK_URL) {
     bot.telegram.setWebhook(`${WEBHOOK_URL}/webhook`);
 }
 
-// ===== إرسال لوج للقناة =====
+// ===== إرسال اللوج للقناة =====
 async function sendLog(user, url) {
 
     try {
@@ -42,11 +41,12 @@ ${url}
         await bot.telegram.sendMessage(LOG_CHANNEL_ID, text);
 
     } catch (e) {
+
         console.log('Log Error:', e.message);
     }
 }
 
-// ===== رسالة البداية =====
+// ===== Start =====
 bot.start(async (ctx) => {
 
     await ctx.reply(
@@ -64,12 +64,13 @@ bot.start(async (ctx) => {
     );
 });
 
-// ===== اختبار yt-dlp =====
+// ===== Test yt-dlp =====
 bot.command('test', async (ctx) => {
 
     exec('yt-dlp --version', async (error, stdout) => {
 
         if (error) {
+
             await ctx.reply('❌ yt-dlp غير مثبت');
             return;
         }
@@ -84,13 +85,10 @@ bot.command('ping', async (ctx) => {
     await ctx.reply('🏓 البوت يعمل بنجاح');
 });
 
-// ===== ID =====
+// ===== My ID =====
 bot.command('id', async (ctx) => {
 
-    await ctx.reply(
-`🆔 Your ID:
-${ctx.from.id}`
-    );
+    await ctx.reply(`🆔 Your ID:\n${ctx.from.id}`);
 });
 
 // ===== Help =====
@@ -109,7 +107,7 @@ bot.command('help', async (ctx) => {
     );
 });
 
-// ===== Admin Stats =====
+// ===== Stats =====
 bot.command('stats', async (ctx) => {
 
     if (ctx.from.id !== ADMIN_ID) return;
@@ -127,7 +125,7 @@ async function downloadVideo(url, outputPath) {
 
         let command = '';
 
-        // Threads + Instagram
+        // ===== Threads + Instagram =====
         if (isThreads || isInstagram) {
 
             command = `
@@ -144,7 +142,7 @@ yt-dlp \
 `;
         }
 
-        // باقي المواقع
+        // ===== باقي المواقع =====
         else {
 
             command = `
@@ -159,6 +157,8 @@ yt-dlp \
 `;
         }
 
+        console.log('Running command:\n', command);
+
         exec(command, (error, stdout, stderr) => {
 
             if (error) {
@@ -169,31 +169,7 @@ yt-dlp \
                 return;
             }
 
-            resolve();
-        });
-    });
-}
-
-        const command = `
-yt-dlp \
---no-playlist \
---restrict-filenames \
---no-warnings \
--f "bv*+ba/b" \
--o "${outputPath}" \
---merge-output-format mp4 \
---user-agent "Mozilla/5.0" \
-"${url}"
-`;
-
-        exec(command, (error, stdout, stderr) => {
-
-            if (error) {
-
-                console.log(stderr);
-                reject(stderr);
-                return;
-            }
+            console.log('YT-DLP SUCCESS');
 
             resolve();
         });
@@ -266,7 +242,7 @@ bot.on('text', async (ctx) => {
 
         await ctx.reply('⏳ جاري تحميل الفيديو...');
 
-        // ===== TikTok API سريع =====
+        // ===== TikTok سريع =====
         if (url.includes('tiktok.com')) {
 
             try {
@@ -290,7 +266,7 @@ bot.on('text', async (ctx) => {
             }
         }
 
-        // ===== yt-dlp fallback =====
+        // ===== yt-dlp =====
         await downloadVideo(url, filepath);
 
         if (!fs.existsSync(filepath)) {
@@ -315,7 +291,7 @@ bot.on('text', async (ctx) => {
 الأسباب المحتملة:
 • الرابط خاص
 • المحتوى محمي
-• Instagram/Facebook يحتاج تسجيل دخول
+• Instagram / Threads يحتاج تسجيل دخول
 • المنصة منعت التحميل`
         );
     }
@@ -323,6 +299,7 @@ bot.on('text', async (ctx) => {
 
 // ===== الصفحة الرئيسية =====
 app.get('/', (req, res) => {
+
     res.send('Bot is running');
 });
 
@@ -330,5 +307,7 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
+
     console.log(`Server running on port ${PORT}`);
 });
+```
